@@ -462,12 +462,17 @@ CREATE TABLE bot_runs (
   status TEXT NOT NULL CHECK (status IN ('processing', 'posted', 'skipped', 'failed')),
   x_post_id TEXT,
   error_code TEXT,
+  lease_expires_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 ```
 
-開始時に対象枠を `processing` として確保する。すでに `posted` の枠は何もせず終了する。投稿成功時はXのPost IDとともに `posted` に更新する。障害時は `failed` を記録し、運用者だけが明示的に同一枠を再実行できる。再実行時もXへの送信前後を記録し、送信結果が不明な場合は投稿履歴を確認してから処理する。
+開始時に対象枠を `processing` として原子的に確保し、`lease_expires_at` を実行開始から10分後に設定する。すでに `posted` の枠は何もせず終了する。有効なリースを持つ `processing` の枠も、別の実行は処理せず終了する。投稿成功時はXのPost IDとともに `posted` に更新する。
+
+Workerの停止などでリース期限を過ぎても `processing` の枠が残った場合、次のCron実行はその行を `failed`（`error_code = 'PROCESSING_LEASE_EXPIRED'`）へ原子的に更新して運用者へ通知する。この状態では自動再投稿しない。運用者はXの投稿履歴と実行ログを確認し、未投稿であることを確認できた場合にだけ同一枠を明示的に再実行できる。再実行時もXへの送信前後を記録し、送信結果が不明な場合は投稿履歴を確認してから処理する。
+
+`skipped` は、障害ではなく運用者が対象枠の投稿を意図的に見送る場合（緊急メンテナンスや一時停止など）だけに使用する。この場合は理由を `error_code`（例: `OPERATOR_SKIP`）に記録し、XへのCounts取得・投稿は行わない。投稿対象外の時刻に起動したCronでは `bot_runs` の行を作らず、`skipped` も記録しない。すでに `skipped` の枠は自動では処理せず、運用者が明示的に再開した場合だけ再実行できる。
 
 ---
 
@@ -1661,15 +1666,17 @@ MVPではログインを要求しない。
 
 5. apps/botを作成
 
-6. TypeScript環境をセットアップ
+6. X Botアカウントを準備
 
-7. X Botアカウントを準備
+7. X Developer設定
 
-8. X Developer設定
+8. ステージング用のX API認証情報を取得・ローカルへ設定
 
-9. X API認証情報をローカルへ設定
+9. コード作成前のAPI利用確認ゲートを実施（テスト投稿とCounts API取得、利用上限・Terms確認）
 
-10. ローカルから固定文字列を1件投稿
+10. TypeScript環境をセットアップ
+
+11. ローカルから固定文字列を1件投稿
 ```
 
-この10まで完了するまでは、Cron、Counts API、Webアプリ、D1、PWAには着手しない。
+この11まで完了するまでは、Cron、Counts APIの本実装、Webアプリ、D1、PWAには着手しない。
