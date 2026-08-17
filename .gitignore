@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Cloudflare
+.wrangler/
+.dev.vars
+.dev.vars.*
+
+# Build
+dist/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
