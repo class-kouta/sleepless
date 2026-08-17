@@ -1661,15 +1661,17 @@ MVPではログインを要求しない。
 
 5. apps/botを作成
 
-6. TypeScript環境をセットアップ
+6. X Botアカウントを準備
 
-7. X Botアカウントを準備
+7. X Developer設定
 
-8. X Developer設定
+8. ステージング用のX API認証情報を取得・ローカルへ設定
 
-9. X API認証情報をローカルへ設定
+9. コード作成前のAPI利用確認ゲートを実施（テスト投稿とCounts API取得、利用上限・Terms確認）
 
-10. ローカルから固定文字列を1件投稿
+10. TypeScript環境をセットアップ
+
+11. ローカルから固定文字列を1件投稿
 ```
 
-この10まで完了するまでは、Cron、Counts API、Webアプリ、D1、PWAには着手しない。
+この11まで完了するまでは、Cron、Counts APIの本実装、Webアプリ、D1、PWAには着手しない。
