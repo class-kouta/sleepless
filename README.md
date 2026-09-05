@@ -6,7 +6,15 @@
 
 ## 現在の段階
 
-Phase 0（リポジトリ初期設定）です。Bot実装、Cloudflare設定、X API認証情報はまだ含まれていません。
+Phase 1（ローカルからのX投稿検証）は完了しました。Cloudflare設定はまだ含まれていません。
+
+## X API 利用確認（Phase 1）
+
+2026-08-17 にX APIのPay Per Useプロジェクトで、$5.00のクレジットと請求サイクル上限$5.00を設定した。Recent Post CountsにはApp-only Bearer Token、投稿にはOAuth 2.0 Authorization Code + PKCEによるBotアカウントのユーザー文脈を使用する。
+
+* Recent Post Counts: `眠れない lang:ja -is:retweet` を実行し、成功（2026-09-05時点で34,111件）。これは実行時点から過去7日間の投稿数である。
+* テスト投稿: OAuth 1.0aでの投稿はHTTP 401 Unauthorizedとなったため、OAuth 2.0 Authorization Code + PKCEへ移行した。新しいDeveloper Appで認可し、`npm run authorize` によりローカルのAccess TokenとRefresh Tokenを取得した後、固定文字列のテスト投稿に成功した。
+* 利用上限とDeveloper Terms: Console上で確認済み。実際のレート制限値はアプリのRate limits画面を参照する。
 
 ## 計画
 
@@ -17,7 +25,7 @@ Phase 0（リポジトリ初期設定）です。Bot実装、Cloudflare設定、
 ```text
 .
 ├── apps/
-│   └── bot/       # X Bot（今後実装）
+│   └── bot/       # ローカル検証済みのX Bot
 ├── docs/
 │   └── BOT_IMPLEMENTATION_PLAN.md
 ├── .gitignore

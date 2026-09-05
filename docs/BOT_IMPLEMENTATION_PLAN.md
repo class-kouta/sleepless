@@ -1,5 +1,34 @@
 # Sleepless 実装計画
 
+## 進捗・再開メモ
+
+最終更新: 2026-09-05
+
+### フェーズ進捗
+
+- [x] Phase 0: リポジトリ初期設定
+- [x] Phase 1: ローカルから固定文字列を投稿
+  - OAuth 2.0 Authorization Code + PKCEでBotアカウントを認可済み
+  - Recent Post Countsを取得済み（`眠れない lang:ja -is:retweet`）
+  - Botアカウントから固定文字列のテスト投稿を確認済み
+- [ ] Phase 2: Cloudflare Workerから固定文字列を投稿 **← 次に着手するフェーズ**
+- [ ] Phase 3: Cronによる固定文字列の自動投稿
+- [ ] Phase 4: 「眠れない」投稿数を取得して動的投稿
+- [ ] Phase 5: Webアプリ最小版
+
+### 次回の作業開始地点（Phase 2）
+
+- [ ] `apps/bot` をCloudflare Workerの構成へ移行する
+- [ ] X APIの認証情報をCloudflare Secretsへ登録する
+- [ ] ステージング環境だけで使える、保護された手動テスト投稿を用意する
+- [ ] Cloudflare Workerから固定文字列を投稿できることを確認する
+
+### 現在のローカル作業状態
+
+* READMEのPhase 1完了記録と、`apps/bot` のローカル検証用コードはコミット前である。
+* 実トークンを含む `apps/bot/.env` はGit管理しない。再開時も値をログやコミットへ出さない。
+* 再開時は `git status --short` で未コミット差分を確認してから作業する。
+
 ## 1. 概要
 
 ### 1.1 プロダクトの目的
