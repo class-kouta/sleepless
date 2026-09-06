@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sleepless-bot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-06",
+  "workers_dev": false,
+  "env": {
+    "staging": {
+      "name": "sleepless-bot-staging",
+      "workers_dev": true
+    }
+  }
+}

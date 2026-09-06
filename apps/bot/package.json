@@ -9,12 +9,16 @@
     "authorize": "node --env-file=.env --import tsx src/authorize.ts",
     "refresh-token": "node --env-file=.env --import tsx src/refresh-token.ts",
     "credentials:check": "node --env-file=.env --import tsx src/credentials-check.ts",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "check:worker": "tsc --project tsconfig.worker.json",
+    "deploy:staging": "wrangler deploy --env staging"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "4.20260702.1",
     "@types/node": "^20.19.0",
     "tsx": "^4.20.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "wrangler": "4.70.0"
   },
   "dependencies": {
     "@xdevplatform/xdk": "^0.6.6"
