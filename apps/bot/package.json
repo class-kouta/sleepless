@@ -11,7 +11,10 @@
     "credentials:check": "node --env-file=.env --import tsx src/credentials-check.ts",
     "check": "tsc --noEmit",
     "check:worker": "tsc --project tsconfig.worker.json",
-    "deploy:staging": "wrangler deploy --env staging"
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env=\"\"",
+    "migrate:staging": "wrangler d1 migrations apply sleepless-bot-staging --remote --env staging",
+    "migrate:production": "wrangler d1 migrations apply sleepless-bot --remote"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20260702.1",

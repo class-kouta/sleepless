@@ -14,20 +14,22 @@
 - [x] Phase 2: Cloudflare Workerから固定文字列を投稿
   - `sleepless-bot-staging` から固定文字列の投稿を確認済み（2026-09-06）
   - ステージングURL: `https://sleepless-bot-staging.sleepless-bot.workers.dev`
-- [ ] Phase 3: Cronによる固定文字列の自動投稿 **← 次に着手するフェーズ**
-- [ ] Phase 4: 「眠れない」投稿数を取得して動的投稿
+- [x] Phase 3: Cronによる固定文字列の自動投稿
+  - 本番Cron初回投稿を確認済み（JST 22:00、2026-09-06）
+  - `bot_runs` のD1冪等性記録を確認済み
+- [ ] Phase 4: 「眠れない」投稿数を取得して動的投稿 **← 次に着手するフェーズ**
 - [ ] Phase 5: Webアプリ最小版
 
-### 次回の作業開始地点（Phase 3）
+### 次回の作業開始地点（Phase 4）
 
-- [ ] Cloudflare Cron Triggerを設定する
-- [ ] D1による投稿枠の冪等性を実装する
-- [ ] JSTの投稿時間帯判定と固定文の自動投稿を実装する
+- [ ] Recent Post Counts APIを予定済みの1時間枠で取得する
+- [ ] 件数取得失敗時に投稿せず、`bot_runs` を `failed` にする
+- [ ] `sleepless_counts` のmigrationとスナップショット保存を実装する
 
 ### 現在のローカル作業状態
 
 * `apps/bot/.env` とCloudflare Secretsの実トークンはGit管理しない。値をログやコミットへ出さない。
-* `X_USER_ACCESS_TOKEN` は期限切れ時に、ローカルで `npm run refresh-token` を実行してからCloudflare Secretを更新する。トークン更新の永続化はPhase 3で設計する。
+* `X_USER_ACCESS_TOKEN` は期限切れ時に、ローカルで `npm run refresh-token` を実行してからCloudflare Secretを更新する。Refresh TokenをWorker/D1へ永続化しない運用とする。
 * 再開時は `git status --short` で未コミット差分を確認してから作業する。
 
 ## 1. 概要

@@ -4,10 +4,36 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-06",
   "workers_dev": false,
+  // Cron is evaluated in UTC. Every UTC hour is invoked; src/time.ts limits
+  // publishing to JST 22:00 through 06:00 (UTC 13:00 through 21:00).
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "BOT_DB",
+      "database_name": "sleepless-bot",
+      "database_id": "f396ec04-4f7e-408c-a7c4-9c49e3123c92",
+      "migrations_dir": "migrations"
+    }
+  ],
   "env": {
     "staging": {
       "name": "sleepless-bot-staging",
-      "workers_dev": true
+      "workers_dev": true,
+      // Staging exposes the protected /test-post endpoint only. It must never
+      // publish automatically to the staging Bot account.
+      "triggers": {
+        "crons": []
+      },
+      "d1_databases": [
+        {
+          "binding": "BOT_DB",
+          "database_name": "sleepless-bot-staging",
+          "database_id": "f73ee736-e20a-4675-8530-fe1962ca7838",
+          "migrations_dir": "migrations"
+        }
+      ]
     }
   }
 }
