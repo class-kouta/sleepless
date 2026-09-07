@@ -6,7 +6,7 @@
 
 ## 現在の段階
 
-Phase 3（CronとD1による固定文字列の自動投稿）は完了しました。本番Worker `sleepless-bot` はJST 22:00〜翌06:00に毎時自動投稿します。次はPhase 4（「眠れない」投稿数を取得して動的投稿）です。
+Phase 4（「眠れない」投稿数を取得して動的投稿）のコード実装が完了しました。本番Worker `sleepless-bot` はJST 22:00〜翌06:00に毎時起動し、予定済みの1時間枠の「眠れない」投稿数を取得して投稿します。Cloudflare Secret・migration・デプロイの反映はまだ必要です。
 
 ## X API 利用確認（Phase 1）
 
@@ -36,7 +36,7 @@ Phase 3（CronとD1による固定文字列の自動投稿）は完了しまし�
 
 X APIのキー、トークン、Cloudflare SecretsをGitへコミットしないでください。ローカルの認証情報は `.env` または `.dev.vars` に保存し、共有するキー名だけを `.env.example` に記載します。
 
-## Cloudflare Worker / D1 運用手順（Phase 3）
+## Cloudflare Worker / D1 運用手順（Phase 3・4）
 
 本番Worker `sleepless-bot` はHTTPルートを公開せず、UTC毎時のCronだけで起動する。Worker内部でJSTを判定し、22:00〜翌06:00だけ投稿する。`0 * * * *` はUTC基準であり、投稿対象となるJST 22:00〜06:00はUTC 13:00〜21:00に対応する。
 
@@ -45,10 +45,11 @@ X APIのキー、トークン、Cloudflare SecretsをGitへコミットしない
 ### 初回セットアップ
 
 1. `cd apps/bot` を実行し、`npx wrangler login` でCloudflareアカウントを認証する。
-2. XのOAuth 2.0ユーザーアクセストークンを、入力プロンプトを通じて登録する。
+2. XのOAuth 2.0ユーザーアクセストークンと、Counts API専用のApp-only Bearer Tokenを、入力プロンプトを通じて登録する。後者はPhase 4のCron実行に必須である。
 
    ```sh
    npx wrangler secret put X_USER_ACCESS_TOKEN --env staging
+   npx wrangler secret put X_BEARER_TOKEN --env staging
    ```
 
 3. 手動実行を保護するランダムなSecretを生成する。生成値はパスワードマネージャーなどに控え、Git・ログ・チャットには貼り付けない。
@@ -78,10 +79,11 @@ X APIのキー、トークン、Cloudflare SecretsをGitへコミットしない
 
 6. 表示された `workers.dev` URLへ、`Authorization: Bearer <TEST_POST_SECRET>` ヘッダー付きで `POST /test-post` を一度だけ送信する。成功時はHTTP 201とXのPost IDが返る。無認証アクセスはHTTP 401、GETは405、別パスは404になる。
 
-7. 本番用の `X_USER_ACCESS_TOKEN` を登録してから、本番Workerをデプロイする。デプロイ後、Cron設定の反映時間中はCloudflareのCron EventsとWorker Logsを監視する。
+7. 本番用の `X_USER_ACCESS_TOKEN` と `X_BEARER_TOKEN` を登録してから、本番Workerをデプロイする。デプロイ後、Cron設定の反映時間中はCloudflareのCron EventsとWorker Logsを監視する。
 
    ```sh
    npx wrangler secret put X_USER_ACCESS_TOKEN
+   npx wrangler secret put X_BEARER_TOKEN
    npm run deploy:production
    ```
 
@@ -90,6 +92,10 @@ X APIのキー、トークン、Cloudflare SecretsをGitへコミットしない
 `bot_runs` は投稿予定の1時間枠をUTCで記録する。最初にその枠を `processing` として原子的に確保できた実行だけが、Xへ1回だけ送信する。成功時はPost IDとともに `posted` に更新する。処理中のWorkerが10分以内に記録を完了できなかった場合、その枠は `failed / PROCESSING_LEASE_EXPIRED` として扱い、自動再投稿しない。Xへの送信後にD1の記録に失敗した場合も同様に、送信結果不明として自動再送しない。
 
 `bot_runs` の本番用D1は `sleepless-bot`、ステージング用D1は `sleepless-bot-staging` に分離している。
+
+### 件数の取得と保存
+
+Phase 4では、各投稿枠の `start_time` / `end_time` を明示してX Recent Post Counts APIへ渡し、`"眠れない" OR "寝れない" lang:ja` の投稿数を取得する。成功した件数は投稿前に `sleepless_counts` へ保存され、投稿成功後に同じ行へPost IDを記録する。Counts APIが429・5xx・タイムアウトになった場合は短い指数バックオフで最大3回試行する。取得または妥当性確認に失敗した枠は投稿せず、`bot_runs` を `failed` にする。
 
 ### OAuthトークン更新
 

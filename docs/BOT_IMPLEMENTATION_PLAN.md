@@ -17,14 +17,14 @@
 - [x] Phase 3: Cronによる固定文字列の自動投稿
   - 本番Cron初回投稿を確認済み（JST 22:00、2026-09-06）
   - `bot_runs` のD1冪等性記録を確認済み
-- [ ] Phase 4: 「眠れない」投稿数を取得して動的投稿 **← 次に着手するフェーズ**
+- [ ] Phase 4: 「眠れない」投稿数を取得して動的投稿（実装済み・本番反映待ち）
 - [ ] Phase 5: Webアプリ最小版
 
-### 次回の作業開始地点（Phase 4）
+### Phase 4の反映前に必要な操作
 
-- [ ] Recent Post Counts APIを予定済みの1時間枠で取得する
-- [ ] 件数取得失敗時に投稿せず、`bot_runs` を `failed` にする
-- [ ] `sleepless_counts` のmigrationとスナップショット保存を実装する
+- [ ] 本番・ステージングへ `X_BEARER_TOKEN` をCloudflare Secretとして登録する
+- [ ] `sleepless_counts` migrationを本番・ステージングへ適用する
+- [ ] 両Workerをデプロイし、本番CronのログとD1記録を確認する
 
 ### 現在のローカル作業状態
 

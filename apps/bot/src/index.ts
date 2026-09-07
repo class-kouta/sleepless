@@ -1,5 +1,8 @@
+import { recordSnapshotPost, saveCountSnapshot } from "./count-snapshots.js";
+import { buildSleeplessMessage } from "./message/build-message.js";
 import { acquireRun, markFailed, markPosted } from "./runs.js";
-import { fixedMessage, isPostingHour, postingWindowFor } from "./time.js";
+import { isPostingHour, postingWindowFor } from "./time.js";
+import { recentSleeplessPostCount, SLEEPLESS_QUERY, SLEEPLESS_QUERY_VERSION, XCountsApiError } from "./x/counts.js";
 import { createFixedTestPost, createPost, type WorkerEnv, XApiError } from "./x/post.js";
 
 async function sha256(value: string): Promise<Uint8Array> {
@@ -18,6 +21,7 @@ function unauthorized(): Response {
 }
 
 function errorCode(error: unknown): string {
+  if (error instanceof XCountsApiError) return `X_COUNTS_${error.status ?? "REQUEST_FAILED"}`;
   if (error instanceof XApiError) return `X_API_${error.status ?? "REQUEST_FAILED"}`;
   return "UNEXPECTED_ERROR";
 }
@@ -38,15 +42,20 @@ async function runScheduledPost(controller: ScheduledController, env: WorkerEnv)
   }
 
   try {
-    const post = await createPost(env, fixedMessage(window.jstHour));
+    const postCount = await recentSleeplessPostCount(env, window.startAt, window.endAt);
+    await saveCountSnapshot(
+      env.BOT_DB, window, SLEEPLESS_QUERY_VERSION, SLEEPLESS_QUERY, postCount, new Date(),
+    );
+    const post = await createPost(env, buildSleeplessMessage(window.jstHour, postCount));
     try {
+      await recordSnapshotPost(env.BOT_DB, window.endAt, post.id);
       await markPosted(env.BOT_DB, window.endAt, post.id, new Date());
     } catch (error) {
       // Never resend: X may have accepted the post although recording the result failed.
       console.error(JSON.stringify({ event: "x_post_sent_recording_failed", windowEndAt: window.endAt }));
       throw error;
     }
-    console.log(JSON.stringify({ event: "cron_post_succeeded", windowEndAt: window.endAt, postId: post.id }));
+    console.log(JSON.stringify({ event: "cron_post_succeeded", windowEndAt: window.endAt, postId: post.id, postCount }));
   } catch (error) {
     try {
       await markFailed(env.BOT_DB, window.endAt, errorCode(error), new Date());

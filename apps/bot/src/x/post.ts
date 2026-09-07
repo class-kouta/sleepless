@@ -3,6 +3,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 export type WorkerEnv = {
   X_USER_ACCESS_TOKEN: string;
+  X_BEARER_TOKEN: string;
   TEST_POST_SECRET?: string;
   BOT_DB: D1Database;
 };
