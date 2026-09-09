@@ -49,7 +49,7 @@ async function runScheduledPost(controller: ScheduledController, env: WorkerEnv)
     await saveCountSnapshot(
       env.BOT_DB, window, SLEEPLESS_QUERY_VERSION, SLEEPLESS_QUERY, postCount, new Date(),
     );
-    const post = await createManagedPost(env, buildSleeplessMessage(window.jstHour, postCount));
+    const post = await createManagedPost(env, buildSleeplessMessage(window.endAt, postCount));
     try {
       await recordSnapshotPost(env.BOT_DB, window.endAt, post.id);
       await markPosted(env.BOT_DB, window.endAt, post.id, new Date());
