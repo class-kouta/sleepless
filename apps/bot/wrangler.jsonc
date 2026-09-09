@@ -4,6 +4,10 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-06",
   "workers_dev": false,
+  "vars": {
+    "TOKEN_CONTEXT": "sleepless-bot-production",
+    "TOKEN_ACTIVE_KEY_ID": "v1"
+  },
   // Cron is evaluated in UTC. Every UTC hour is invoked; src/time.ts limits
   // publishing to JST 22:00 through 06:00 (UTC 13:00 through 21:00).
   "triggers": {
@@ -21,6 +25,10 @@
     "staging": {
       "name": "sleepless-bot-staging",
       "workers_dev": true,
+      "vars": {
+        "TOKEN_CONTEXT": "sleepless-bot-staging",
+        "TOKEN_ACTIVE_KEY_ID": "v1"
+      },
       // Staging exposes the protected /test-post endpoint only. It must never
       // publish automatically to the staging Bot account.
       "triggers": {

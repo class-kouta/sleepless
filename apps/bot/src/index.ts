@@ -3,7 +3,9 @@ import { buildSleeplessMessage } from "./message/build-message.js";
 import { acquireRun, markFailed, markPosted } from "./runs.js";
 import { isPostingHour, postingWindowFor } from "./time.js";
 import { recentSleeplessPostCount, SLEEPLESS_QUERY, SLEEPLESS_QUERY_VERSION, XCountsApiError } from "./x/counts.js";
-import { createFixedTestPost, createPost, type WorkerEnv, XApiError } from "./x/post.js";
+import { type WorkerEnv, XApiError } from "./x/post.js";
+import { createManagedPost } from "./token-post.js";
+import { reportTokenFailure, TokenError } from "./tokens.js";
 
 async function sha256(value: string): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
@@ -21,6 +23,7 @@ function unauthorized(): Response {
 }
 
 function errorCode(error: unknown): string {
+  if (error instanceof TokenError) return error.code;
   if (error instanceof XCountsApiError) return `X_COUNTS_${error.status ?? "REQUEST_FAILED"}`;
   if (error instanceof XApiError) return `X_API_${error.status ?? "REQUEST_FAILED"}`;
   return "UNEXPECTED_ERROR";
@@ -46,7 +49,7 @@ async function runScheduledPost(controller: ScheduledController, env: WorkerEnv)
     await saveCountSnapshot(
       env.BOT_DB, window, SLEEPLESS_QUERY_VERSION, SLEEPLESS_QUERY, postCount, new Date(),
     );
-    const post = await createPost(env, buildSleeplessMessage(window.jstHour, postCount));
+    const post = await createManagedPost(env, buildSleeplessMessage(window.jstHour, postCount));
     try {
       await recordSnapshotPost(env.BOT_DB, window.endAt, post.id);
       await markPosted(env.BOT_DB, window.endAt, post.id, new Date());
@@ -63,7 +66,8 @@ async function runScheduledPost(controller: ScheduledController, env: WorkerEnv)
       // The existing processing lease prevents automatic retry until it is recorded as failed.
     }
     const status = error instanceof XApiError ? error.status : undefined;
-    console.error(JSON.stringify({ event: "cron_post_failed", windowEndAt: window.endAt, xStatus: status ?? null }));
+    console.error(JSON.stringify({ event: "cron_post_failed", windowEndAt: window.endAt, xStatus: status ?? null, code: errorCode(error) }));
+    if (error instanceof TokenError) await reportTokenFailure(env, error);
   }
 }
 
@@ -83,12 +87,13 @@ export default {
     }
 
     try {
-      const post = await createFixedTestPost(env);
+      const post = await createManagedPost(env, "Sleepless Bot テスト投稿");
       console.log(JSON.stringify({ event: "test_post_succeeded", postId: post.id }));
       return Response.json({ id: post.id }, { status: 201 });
     } catch (error) {
       const status = error instanceof XApiError ? error.status : undefined;
-      console.error(JSON.stringify({ event: "test_post_failed", xStatus: status ?? null }));
+      console.error(JSON.stringify({ event: "test_post_failed", xStatus: status ?? null, code: errorCode(error) }));
+      if (error instanceof TokenError) await reportTokenFailure(env, error);
       return Response.json({ error: "Posting to X failed" }, { status: 502 });
     }
   },

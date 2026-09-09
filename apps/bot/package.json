@@ -8,9 +8,12 @@
     "counts": "node --env-file=.env --import tsx src/counts.ts",
     "authorize": "node --env-file=.env --import tsx src/authorize.ts",
     "refresh-token": "node --env-file=.env --import tsx src/refresh-token.ts",
+    "tokens": "node --import tsx src/token-admin.ts",
+    "test": "node --import tsx --test test/*.test.ts",
     "credentials:check": "node --env-file=.env --import tsx src/credentials-check.ts",
     "check": "tsc --noEmit",
     "check:worker": "tsc --project tsconfig.worker.json",
+    "check:test": "tsc --project tsconfig.test.json",
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:production": "wrangler deploy --env=\"\"",
     "migrate:staging": "wrangler d1 migrations apply sleepless-bot-staging --remote --env staging",
@@ -19,6 +22,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "4.20260702.1",
     "@types/node": "^20.19.0",
+    "miniflare": "4.20260301.1",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0",
     "wrangler": "4.70.0"

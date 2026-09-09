@@ -1,8 +1,9 @@
+import type { TokenEnv } from "../tokens.js";
+
 const X_POST_URL = "https://api.x.com/2/tweets";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-export type WorkerEnv = {
-  X_USER_ACCESS_TOKEN: string;
+export type WorkerEnv = TokenEnv & {
   X_BEARER_TOKEN: string;
   TEST_POST_SECRET?: string;
   BOT_DB: D1Database;
@@ -32,7 +33,7 @@ async function responseMessage(response: Response): Promise<string> {
 }
 
 export async function createPost(
-  env: Pick<WorkerEnv, "X_USER_ACCESS_TOKEN">,
+  env: { X_USER_ACCESS_TOKEN: string },
   text: string,
 ): Promise<{ id: string }> {
   if (!env.X_USER_ACCESS_TOKEN) throw new XApiError("X_USER_ACCESS_TOKEN is not configured");
@@ -64,6 +65,6 @@ export async function createPost(
   return { id: body.data.id };
 }
 
-export function createFixedTestPost(env: Pick<WorkerEnv, "X_USER_ACCESS_TOKEN">): Promise<{ id: string }> {
+export function createFixedTestPost(env: { X_USER_ACCESS_TOKEN: string }): Promise<{ id: string }> {
   return createPost(env, "Sleepless Bot テスト投稿");
 }

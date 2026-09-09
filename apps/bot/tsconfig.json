@@ -13,6 +13,8 @@
     "src/runs.ts",
     "src/time.ts",
     "src/count-snapshots.ts",
+    "src/tokens.ts",
+    "src/token-post.ts",
     "src/message/build-message.ts",
     "src/x/counts.ts",
     "src/x/post.ts"

@@ -6,7 +6,7 @@
 
 ## 現在の段階
 
-Phase 4（「眠れない」投稿数を取得して動的投稿）のコード実装が完了しました。本番Worker `sleepless-bot` はJST 22:00〜翌06:00に毎時起動し、予定済みの1時間枠の「眠れない」投稿数を取得して投稿します。Cloudflare Secret・migration・デプロイの反映はまだ必要です。
+Phase 4の動的投稿は本番反映済みです。Phase 5（投稿用OAuthトークンの自動更新）はコード実装済みで、Secrets登録・migration・初期トークン投入・デプロイ・夜間の運用確認が残っています。本番Worker `sleepless-bot` はJST 22:00〜翌06:00に毎時起動し、予定済みの1時間枠の「眠れない」投稿数を取得して投稿します。
 
 ## X API 利用確認（Phase 1）
 
@@ -36,7 +36,7 @@ Phase 4（「眠れない」投稿数を取得して動的投稿）のコード�
 
 X APIのキー、トークン、Cloudflare SecretsをGitへコミットしないでください。ローカルの認証情報は `.env` または `.dev.vars` に保存し、共有するキー名だけを `.env.example` に記載します。
 
-## Cloudflare Worker / D1 運用手順（Phase 3・4）
+## Cloudflare Worker / D1 運用手順（Phase 5）
 
 本番Worker `sleepless-bot` はHTTPルートを公開せず、UTC毎時のCronだけで起動する。Worker内部でJSTを判定し、22:00〜翌06:00だけ投稿する。`0 * * * *` はUTC基準であり、投稿対象となるJST 22:00〜06:00はUTC 13:00〜21:00に対応する。
 
@@ -44,48 +44,9 @@ X APIのキー、トークン、Cloudflare SecretsをGitへコミットしない
 
 ### 初回セットアップ
 
-1. `cd apps/bot` を実行し、`npx wrangler login` でCloudflareアカウントを認証する。
-2. XのOAuth 2.0ユーザーアクセストークンと、Counts API専用のApp-only Bearer Tokenを、入力プロンプトを通じて登録する。後者はPhase 4のCron実行に必須である。
+[Phase 5運用ガイド](docs/PHASE_5_TOKEN_REFRESH_GUIDE.md)に従い、ステージングから導入します。Phase 5のWorkerはD1のトークン状態を利用するため、デプロイ前にSecrets・migration・暗号化済みRefresh Tokenの初期投入が必要です。
 
-   ```sh
-   npx wrangler secret put X_USER_ACCESS_TOKEN --env staging
-   npx wrangler secret put X_BEARER_TOKEN --env staging
-   ```
-
-3. 手動実行を保護するランダムなSecretを生成する。生成値はパスワードマネージャーなどに控え、Git・ログ・チャットには貼り付けない。
-
-   ```sh
-   openssl rand -base64 32
-   ```
-
-   続けて、表示された値を入力プロンプトへ貼り付ける。
-
-   ```sh
-   npx wrangler secret put TEST_POST_SECRET --env staging
-   ```
-
-4. D1 migrationを、本番とステージングそれぞれに一度だけ適用する。
-
-   ```sh
-   npm run migrate:staging
-   npm run migrate:production
-   ```
-
-5. ステージングだけをデプロイする。
-
-   ```sh
-   npm run deploy:staging
-   ```
-
-6. 表示された `workers.dev` URLへ、`Authorization: Bearer <TEST_POST_SECRET>` ヘッダー付きで `POST /test-post` を一度だけ送信する。成功時はHTTP 201とXのPost IDが返る。無認証アクセスはHTTP 401、GETは405、別パスは404になる。
-
-7. 本番用の `X_USER_ACCESS_TOKEN` と `X_BEARER_TOKEN` を登録してから、本番Workerをデプロイする。デプロイ後、Cron設定の反映時間中はCloudflareのCron EventsとWorker Logsを監視する。
-
-   ```sh
-   npx wrangler secret put X_USER_ACCESS_TOKEN
-   npx wrangler secret put X_BEARER_TOKEN
-   npm run deploy:production
-   ```
+旧Phase 2・3ガイドの `X_USER_ACCESS_TOKEN` をSecretへ登録する手順は旧実装向けです。Phase 5ではこのSecretへのフォールバックはありません。
 
 ### 二重投稿防止
 
@@ -99,11 +60,25 @@ Phase 4では、各投稿枠の `start_time` / `end_time` を明示してX Recen
 
 ### OAuthトークン更新
 
-Refresh TokenをWorkerやD1へ保存して自動更新はしない。`X_USER_ACCESS_TOKEN` の期限切れ時は、ローカルで `npm run refresh-token` を実行し、新しいAccess Tokenを次の対話コマンドで本番・ステージングそれぞれに登録する。トークン値をログ、Git、チャットへ出力しない。
+投稿前にAccess Tokenの残り時間を確認し、5分未満なら更新します。Refresh TokenとAccess TokenはAES-GCMで暗号化してD1へ保存し、鍵はWorker Secretに保持します。更新結果が不明な場合は自動再試行せず、トークン全体を復旧待ちにします。
+
+状態の確認と、再認可後の復旧は次のコマンドで行います。トークンや暗号化鍵は非表示プロンプトへ入力します。復旧の前提条件と鍵交換は[運用ガイド](docs/PHASE_5_TOKEN_REFRESH_GUIDE.md)を参照してください。
 
 ```sh
-npx wrangler secret put X_USER_ACCESS_TOKEN
-npx wrangler secret put X_USER_ACCESS_TOKEN --env staging
+npm run tokens -- status --target production --remote
+npm run tokens -- recover --target production --remote --confirm-recovery
 ```
 
-`X_USER_ACCESS_TOKEN` は期限切れ時にX APIが失敗する。Phase 2ではローカルの認可・更新フローで新しいトークンを得てから、同じSecretを再登録する。トークン更新の永続化はPhase 3で扱う。
+Workerへ引き渡したRefresh Tokenをローカルの `npm run refresh-token` で更新しないでください。Workerとローカルが同じトークンを使うとローテーション競合になります。
+
+### ローカル検証
+
+```sh
+cd apps/bot
+npm run check
+npm run check:worker
+npm run check:test
+npm test
+```
+
+テストでは一時的なローカルD1と偽トークンを使い、Xへの実投稿やリモートD1への書き込みは行いません。

@@ -18,7 +18,7 @@
   - 本番Cron初回投稿を確認済み（JST 22:00、2026-09-06）
   - `bot_runs` のD1冪等性記録を確認済み
 - [ ] Phase 4: 「眠れない」投稿数を取得して動的投稿（本番反映済み・運用検証中）
-- [ ] Phase 5: Refresh Tokenの自動更新
+- [ ] Phase 5: Refresh Tokenの自動更新（コード実装済み・環境反映と夜間運用検証待ち）
 - [ ] Phase 6: Webアプリ最小版
 
 ### Phase 4の運用状況
@@ -31,7 +31,7 @@
 ### 現在のローカル作業状態
 
 * `apps/bot/.env` とCloudflare Secretsの実トークンはGit管理しない。値をログやコミットへ出さない。
-* 現状の `X_USER_ACCESS_TOKEN` は期限切れ時に、ローカルで `npm run refresh-token` を実行してCloudflare Secretを更新する。Phase 5で、この手動運用を安全な自動更新へ置き換える。
+* Phase 5のコードはD1の暗号化済みトークンを利用する。導入前の本番は従来の手動更新が必要だが、Phase 5へ引き渡したRefresh Tokenはローカルで更新しない。導入・復旧・鍵交換は [Phase 5運用ガイド](PHASE_5_TOKEN_REFRESH_GUIDE.md)を参照する。
 * 再開時は `git status --short` で未コミット差分を確認してから作業する。
 
 ## 1. 概要
