@@ -12,5 +12,5 @@ function formatJstDateTime(windowEndAt: string): string {
 }
 
 export function buildSleeplessMessage(windowEndAt: string, postCount: number): string {
-  return `${formatJstDateTime(windowEndAt)}\n直近1時間で、\n「眠れない」「寝れない」という投稿が\n${postCount.toLocaleString("ja-JP")}件ありました。\nあなた以外にも、眠れない人はたくさんいます。`;
+  return `${formatJstDateTime(windowEndAt)}\n\n直近1時間に、\n\n「眠れない」「ねむれない」\n「眠れぬ」「ねむれぬ」\n「眠れん」「ねむれん」\n「寝れない」「ねれない」\n「寝れぬ」「ねれぬ」\n「寝れん」「ねれん」\n\nという投稿が、合わせて\n\n${postCount.toLocaleString("ja-JP")}件\n\nありました。\n\n今この瞬間、眠れずにいるのはあなただけではないようです。`;
 }

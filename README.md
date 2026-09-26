@@ -56,7 +56,7 @@ X APIのキー、トークン、Cloudflare SecretsをGitへコミットしない
 
 ### 件数の取得と保存
 
-Phase 4では、各投稿枠の `start_time` / `end_time` を明示してX Recent Post Counts APIへ渡し、`"眠れない" OR "寝れない" lang:ja` の投稿数を取得する。成功した件数は投稿前に `sleepless_counts` へ保存され、投稿成功後に同じ行へPost IDを記録する。Counts APIが429・5xx・タイムアウトになった場合は短い指数バックオフで最大3回試行する。取得または妥当性確認に失敗した枠は投稿せず、`bot_runs` を `failed` にする。
+Phase 4では、各投稿枠の `start_time` / `end_time` を明示してX Recent Post Counts APIへ渡し、「眠れない」「ねむれない」「眠れぬ」「ねむれぬ」「眠れん」「ねむれん」「寝れない」「ねれない」「寝れぬ」「ねれぬ」「寝れん」「ねれん」のいずれかを含む日本語の投稿（リポストを除く）を1つのORクエリで集計する。成功した件数は投稿前に `sleepless_counts` へ保存され、投稿成功後に同じ行へPost IDを記録する。Counts APIが429・5xx・タイムアウトになった場合は短い指数バックオフで最大3回試行する。取得または妥当性確認に失敗した枠は投稿せず、`bot_runs` を `failed` にする。
 
 ### OAuthトークン更新
 
