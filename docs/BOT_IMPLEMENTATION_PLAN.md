@@ -57,7 +57,7 @@
 1. X Botを最小構成で動かす
 2. Botを自動化する
 3. X上の「眠れない」投稿数をBotに表示する
-4. HTML・Tailwind CSS・素のJavaScriptでWebアプリを作る
+4. HTML・CSS・素のJavaScriptでWebアプリを作る
 5. Webアプリ独自の「今ここにいる人」機能を追加する
 6. PWA化する
 7. 利用状況を見ながら機能・収益化を検討する
@@ -126,7 +126,7 @@ sleepless/
 ## 3.3 Webアプリ
 
 * HTML
-* Tailwind CSS
+* CSS
 * JavaScript（フレームワークなし）
 * Cloudflare
 * Cloudflare Workers
@@ -846,13 +846,12 @@ sleepless/
 │   ├── web-vanilla-js/              # MVPとして先に公開する版
 │   │   ├── index.html
 │   │   ├── package.json
-│   │   ├── tailwind.config.js
 │   │   └── src/
 │   │       ├── main.js
 │   │       ├── api/
 │   │       ├── views/
 │   │       ├── lib/
-│   │       └── styles/input.css
+│   │       └── styles/main.css
 │   └── web-react/                   # React学習・検証用。後で追加
 │       ├── index.html
 │       ├── package.json
@@ -863,7 +862,7 @@ sleepless/
 │           ├── components/
 │           ├── hooks/
 │           ├── lib/
-│           └── styles/input.css
+│           └── styles/main.css
 │
 └── docs/
 ```
@@ -872,7 +871,7 @@ sleepless/
 
 ## 10.2 Vanilla JavaScript版の実装方針
 
-技術はHTML、Tailwind CSS、素のJavaScriptとする。Tailwind CSSはCLIでビルドし、生成したCSSを静的アセットとして配信する。React、Vite、TypeScript、ルーティングライブラリはこのフェーズでは導入しない。
+技術はHTML、CSS、素のJavaScriptとする。CSSはビルドせず、静的アセットとしてそのまま配信する。React、Vite、TypeScript、ルーティングライブラリはこのフェーズでは導入しない。
 
 React移行を容易にするため、以下を守る。
 
@@ -896,7 +895,7 @@ React移行を容易にするため、以下を守る。
 | 状態管理用のJSモジュール | `hooks/useCounts.js`、`hooks/usePresence.js` |
 | `main.js` | `main.jsx` と `App.jsx` |
 
-React版でもTailwind CSS、API URL、匿名IDキー、表示する文言と鮮度判定をVanilla版と揃える。これにより、移行時にバックエンドとデータを変更しない。
+React版でもCSS、API URL、匿名IDキー、表示する文言と鮮度判定をVanilla版と揃える。これにより、移行時にバックエンドとデータを変更しない。
 
 ## 10.4 配信先と移行手順
 
@@ -1540,11 +1539,10 @@ PCを閉じていても毎晩Botが動く。
 
 ## Milestone 5
 
-### HTML / Tailwind CSS / JavaScript Web MVP
+### HTML / CSS / JavaScript Web MVP
 
 * [ ] `apps/web-vanilla-js` を作成
-* [ ] HTML + Tailwind CSS + 素のJavaScriptで画面を作成
-* [ ] Tailwind CSSの本番ビルドを追加
+* [ ] HTML + CSS + 素のJavaScriptで画面を作成
 * [ ] Cloudflareへデプロイ
 * [ ] `apps/api` Workerを作成し、D1 bindingを追加
 * [ ] Botから件数保存
