@@ -2,7 +2,7 @@ import { XApiError } from "./post.js";
 
 const X_RECENT_COUNTS_URL = "https://api.x.com/2/tweets/counts/recent";
 const REQUEST_TIMEOUT_MS = 15_000;
-const MAX_ATTEMPTS = 3;
+const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 250;
 
 export const SLEEPLESS_QUERY = '("眠れない" OR "ねむれない" OR "眠れぬ" OR "ねむれぬ" OR "眠れん" OR "ねむれん" OR "寝れない" OR "ねれない" OR "寝れぬ" OR "ねれぬ" OR "寝れん" OR "ねれん") lang:ja -is:retweet';
@@ -20,7 +20,8 @@ export class XCountsApiError extends XApiError {
 }
 
 function isRetryable(error: unknown): boolean {
-  return error instanceof XApiError && (error.status === undefined || error.status === 429 || error.status >= 500);
+  return error instanceof XApiError
+    && (error.status === undefined || error.status === 400 || error.status === 429 || error.status >= 500);
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -59,16 +60,16 @@ async function requestCount(env: CountsEnv, startAt: string, endAt: string): Pro
   return body.meta.total_tweet_count;
 }
 
-/** Gets the count for the exact scheduled window, retrying transient failures only. */
+/** Gets the count for the exact scheduled window, retrying eligible failures up to three times. */
 export async function recentSleeplessPostCount(env: CountsEnv, startAt: string, endAt: string): Promise<number> {
   let lastError: unknown;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     try {
       return await requestCount(env, startAt, endAt);
     } catch (error) {
       lastError = error;
-      if (!isRetryable(error) || attempt === MAX_ATTEMPTS) throw error;
-      await wait(INITIAL_RETRY_DELAY_MS * 2 ** (attempt - 1));
+      if (!isRetryable(error) || attempt === MAX_RETRIES) throw error;
+      await wait(INITIAL_RETRY_DELAY_MS * 2 ** attempt);
     }
   }
   throw lastError;

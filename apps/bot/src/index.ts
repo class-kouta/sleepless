@@ -1,7 +1,7 @@
 import { CountSnapshotsError, loadCountSnapshots, recordSnapshotPost, saveCountSnapshot } from "./count-snapshots.js";
 import { buildDailySleeplessMessage, buildSleeplessMessage } from "./message/build-message.js";
 import { acquireRun, markFailed, markPosted } from "./runs.js";
-import { dailySummaryWindowFor, isDailySummaryHour, isPostingHour, postingWindowFor } from "./time.js";
+import { countsReadyDelayMs, dailySummaryWindowFor, isDailySummaryHour, isPostingHour, postingWindowFor } from "./time.js";
 import { recentSleeplessPostCount, SLEEPLESS_QUERY, SLEEPLESS_QUERY_VERSION, XCountsApiError } from "./x/counts.js";
 import { type WorkerEnv, XApiError } from "./x/post.js";
 import { createManagedPost } from "./token-post.js";
@@ -57,6 +57,8 @@ async function runHourlyPost(controller: ScheduledController, env: WorkerEnv): P
   if (!(await acquireScheduledRun(env, window))) return;
 
   try {
+    const delay = countsReadyDelayMs(controller.scheduledTime);
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
     const postCount = await recentSleeplessPostCount(env, window.startAt, window.endAt);
     await saveCountSnapshot(
       env.BOT_DB, window, SLEEPLESS_QUERY_VERSION, SLEEPLESS_QUERY, postCount, new Date(),

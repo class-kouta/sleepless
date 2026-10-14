@@ -1,4 +1,5 @@
 const JST_TIME_ZONE = "Asia/Tokyo";
+const COUNTS_READY_DELAY_MS = 15_000;
 
 export type PostingWindow = {
   startAt: string;
@@ -35,6 +36,11 @@ export function postingWindowFor(scheduledTime: number): PostingWindow {
 
 export function isPostingHour(jstHour: number): boolean {
   return jstHour >= 22 || jstHour <= 6;
+}
+
+/** Wait until the scheduled hour is at least 15 seconds old before querying X. */
+export function countsReadyDelayMs(scheduledTime: number, now = Date.now()): number {
+  return Math.max(0, scheduledTime + COUNTS_READY_DELAY_MS - now);
 }
 
 export function isDailySummaryHour(jstHour: number): boolean {
