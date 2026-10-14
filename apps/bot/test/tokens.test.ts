@@ -355,6 +355,52 @@ test("failed refresh marks this and subsequent Cron windows failed with safe rea
   assert.equal(refreshes, 1);
 });
 
+async function seedNightlyCounts(startAt = "2026-09-25T13:00:00.000Z"): Promise<void> {
+  for (let index = 0; index < 8; index += 1) {
+    const start = new Date(Date.parse(startAt) + index * 3_600_000).toISOString();
+    const end = new Date(Date.parse(startAt) + (index + 1) * 3_600_000).toISOString();
+    await db.prepare(
+      `INSERT INTO sleepless_counts (
+        window_end_at, window_start_at, query_version, query_text, post_count, fetched_at, x_post_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(end, start, "2",
+      '("眠れない" OR "ねむれない" OR "眠れぬ" OR "ねむれぬ" OR "眠れん" OR "ねむれん" OR "寝れない" OR "ねれない" OR "寝れぬ" OR "ねれぬ" OR "寝れん" OR "ねれん") lang:ja -is:retweet',
+      index + 1, end, `hourly-${index}`).run();
+  }
+}
+
+test("07:00 Cron posts one daily summary from existing hourly DB snapshots", async (t) => {
+  await seed(true);
+  await seedNightlyCounts();
+  let postedText = "";
+  const request = mockFetch(t, async (url, options) => {
+    assert.ok(!String(url).includes("counts/recent"));
+    postedText = String(JSON.parse(String(options?.body)).text);
+    return Response.json({ data: { id: "daily-12345" } });
+  });
+  const at = Date.parse("2026-09-25T22:00:00.000Z");
+  await scheduled(at);
+  await scheduled(at);
+  assert.equal(request.mock.callCount(), 1);
+  assert.match(postedText, /^9月25日22:00〜9月26日6:00/);
+  assert.match(postedText, /合計\s+36件/);
+  assert.match(postedText, /22:00〜23:00：1件/);
+  assert.match(postedText, /05:00〜06:00：8件$/);
+});
+
+test("07:00 Cron does not post an incomplete daily summary", async (t) => {
+  await seed(true);
+  await seedNightlyCounts();
+  await db.prepare("DELETE FROM sleepless_counts WHERE window_end_at = ?")
+    .bind("2026-09-25T17:00:00.000Z").run();
+  const request = mockFetch(t, async () => { throw new Error("unexpected network request"); });
+  await scheduled(Date.parse("2026-09-25T22:00:00.000Z"));
+  assert.equal(request.mock.callCount(), 0);
+  assert.deepEqual(await db.prepare("SELECT status, error_code FROM bot_runs").first(), {
+    status: "failed", error_code: "COUNT_SNAPSHOTS_INCOMPLETE",
+  });
+});
+
 test("staging endpoint authenticates first and exposes no token in successful response", async (t) => {
   await seed();
   const request = mockFetch(t, async (url) => String(url).endsWith("oauth2/token")

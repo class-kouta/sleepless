@@ -6,7 +6,7 @@
 
 ## 現在の段階
 
-Phase 4の動的投稿は本番反映済みです。Phase 5（投稿用OAuthトークンの自動更新）はコード実装済みで、Secrets登録・migration・初期トークン投入・デプロイ・夜間の運用確認が残っています。本番Worker `sleepless-bot` はJST 22:00〜翌06:00に毎時起動し、予定済みの1時間枠の「眠れない」投稿数を取得して投稿します。
+Phase 4の動的投稿は本番反映済みです。Phase 5（投稿用OAuthトークンの自動更新）はコード実装済みで、Secrets登録・migration・初期トークン投入・デプロイ・夜間の運用確認が残っています。本番Worker `sleepless-bot` はJST 22:00〜翌06:00に、予定済みの1時間枠の「眠れない」投稿数を取得・保存して毎時投稿します。さらに07:00に、DBへ保存済みの22:00〜06:00の8件を合算し、日次集計を投稿します。
 
 ## X API 利用確認（Phase 1）
 
@@ -38,7 +38,7 @@ X APIのキー、トークン、Cloudflare SecretsをGitへコミットしない
 
 ## Cloudflare Worker / D1 運用手順（Phase 5）
 
-本番Worker `sleepless-bot` はHTTPルートを公開せず、UTC毎時のCronだけで起動する。Worker内部でJSTを判定し、22:00〜翌06:00だけ投稿する。`0 * * * *` はUTC基準であり、投稿対象となるJST 22:00〜06:00はUTC 13:00〜21:00に対応する。
+本番Worker `sleepless-bot` はHTTPルートを公開せず、UTC毎時のCronだけで起動する。Worker内部でJSTを判定し、22:00〜翌06:00は毎時投稿、07:00は日次集計を投稿する。`0 * * * *` はUTC基準であり、JST 22:00〜07:00はUTC 13:00〜22:00に対応する。
 
 ステージングWorker `sleepless-bot-staging` はCronを設定せず、保護された `POST /test-post` だけを公開する。
 
@@ -57,6 +57,8 @@ X APIのキー、トークン、Cloudflare SecretsをGitへコミットしない
 ### 件数の取得と保存
 
 Phase 4では、各投稿枠の `start_time` / `end_time` を明示してX Recent Post Counts APIへ渡し、「眠れない」「ねむれない」「眠れぬ」「ねむれぬ」「眠れん」「ねむれん」「寝れない」「ねれない」「寝れぬ」「ねれぬ」「寝れん」「ねれん」のいずれかを含む日本語の投稿（リポストを除く）を1つのORクエリで集計する。成功した件数は投稿前に `sleepless_counts` へ保存され、投稿成功後に同じ行へPost IDを記録する。Counts APIが429・5xx・タイムアウトになった場合は短い指数バックオフで最大3回試行する。取得または妥当性確認に失敗した枠は投稿せず、`bot_runs` を `failed` にする。
+
+07:00の日次集計ではCounts APIを再実行せず、`sleepless_counts` から前日22:00〜当日06:00の8件を取得する。8件が連続して揃い、検索条件とバージョンがすべて現在値と一致する場合だけ合計と時間帯別内訳を投稿する。欠損または不整合がある場合は投稿せず、07:00の実行を `failed / COUNT_SNAPSHOTS_INCOMPLETE` として記録する。
 
 ### OAuthトークン更新
 

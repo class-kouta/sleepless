@@ -1,7 +1,7 @@
-import { recordSnapshotPost, saveCountSnapshot } from "./count-snapshots.js";
-import { buildSleeplessMessage } from "./message/build-message.js";
+import { CountSnapshotsError, loadCountSnapshots, recordSnapshotPost, saveCountSnapshot } from "./count-snapshots.js";
+import { buildDailySleeplessMessage, buildSleeplessMessage } from "./message/build-message.js";
 import { acquireRun, markFailed, markPosted } from "./runs.js";
-import { isPostingHour, postingWindowFor } from "./time.js";
+import { dailySummaryWindowFor, isDailySummaryHour, isPostingHour, postingWindowFor } from "./time.js";
 import { recentSleeplessPostCount, SLEEPLESS_QUERY, SLEEPLESS_QUERY_VERSION, XCountsApiError } from "./x/counts.js";
 import { type WorkerEnv, XApiError } from "./x/post.js";
 import { createManagedPost } from "./token-post.js";
@@ -24,25 +24,37 @@ function unauthorized(): Response {
 
 function errorCode(error: unknown): string {
   if (error instanceof TokenError) return error.code;
+  if (error instanceof CountSnapshotsError) return error.code;
   if (error instanceof XCountsApiError) return `X_COUNTS_${error.status ?? "REQUEST_FAILED"}`;
   if (error instanceof XApiError) return `X_API_${error.status ?? "REQUEST_FAILED"}`;
   return "UNEXPECTED_ERROR";
 }
 
-async function runScheduledPost(controller: ScheduledController, env: WorkerEnv): Promise<void> {
-  const window = postingWindowFor(controller.scheduledTime);
-  if (!isPostingHour(window.jstHour)) {
-    console.log(JSON.stringify({ event: "cron_outside_posting_hours", windowEndAt: window.endAt }));
-    return;
-  }
-
+async function acquireScheduledRun(env: WorkerEnv, window: { startAt: string; endAt: string }): Promise<boolean> {
   const acquired = await acquireRun(env.BOT_DB, window, new Date());
   if (acquired !== "acquired") {
     const log = { event: "cron_run_not_started", reason: acquired, windowEndAt: window.endAt };
     if (acquired === "lease_expired") console.error(JSON.stringify(log));
     else console.log(JSON.stringify(log));
-    return;
+    return false;
   }
+  return true;
+}
+
+async function recordFailure(env: WorkerEnv, windowEndAt: string, error: unknown): Promise<void> {
+  try {
+    await markFailed(env.BOT_DB, windowEndAt, errorCode(error), new Date());
+  } catch {
+    // The existing processing lease prevents automatic retry until it is recorded as failed.
+  }
+  const status = error instanceof XApiError ? error.status : undefined;
+  console.error(JSON.stringify({ event: "cron_post_failed", windowEndAt, xStatus: status ?? null, code: errorCode(error) }));
+  if (error instanceof TokenError) await reportTokenFailure(env, error);
+}
+
+async function runHourlyPost(controller: ScheduledController, env: WorkerEnv): Promise<void> {
+  const window = postingWindowFor(controller.scheduledTime);
+  if (!(await acquireScheduledRun(env, window))) return;
 
   try {
     const postCount = await recentSleeplessPostCount(env, window.startAt, window.endAt);
@@ -60,14 +72,52 @@ async function runScheduledPost(controller: ScheduledController, env: WorkerEnv)
     }
     console.log(JSON.stringify({ event: "cron_post_succeeded", windowEndAt: window.endAt, postId: post.id, postCount }));
   } catch (error) {
+    await recordFailure(env, window.endAt, error);
+  }
+}
+
+async function runDailySummaryPost(scheduledTime: number, env: WorkerEnv): Promise<void> {
+  // The 06:00-07:00 execution window gives this post its own idempotency key;
+  // the summarized data range remains the previous 22:00-06:00.
+  const executionWindow = postingWindowFor(scheduledTime);
+  const summaryWindow = dailySummaryWindowFor(scheduledTime);
+  if (!(await acquireScheduledRun(env, executionWindow))) return;
+
+  try {
+    const counts = await loadCountSnapshots(
+      env.BOT_DB, summaryWindow, SLEEPLESS_QUERY_VERSION, SLEEPLESS_QUERY,
+    );
+    const postCount = counts.reduce((sum, count) => sum + count.postCount, 0);
+    const post = await createManagedPost(
+      env, buildDailySleeplessMessage(summaryWindow.startAt, summaryWindow.endAt, counts),
+    );
     try {
-      await markFailed(env.BOT_DB, window.endAt, errorCode(error), new Date());
-    } catch {
-      // The existing processing lease prevents automatic retry until it is recorded as failed.
+      await markPosted(env.BOT_DB, executionWindow.endAt, post.id, new Date());
+    } catch (error) {
+      // Never resend: X may have accepted the post although recording the result failed.
+      console.error(JSON.stringify({ event: "x_post_sent_recording_failed", windowEndAt: executionWindow.endAt }));
+      throw error;
     }
-    const status = error instanceof XApiError ? error.status : undefined;
-    console.error(JSON.stringify({ event: "cron_post_failed", windowEndAt: window.endAt, xStatus: status ?? null, code: errorCode(error) }));
-    if (error instanceof TokenError) await reportTokenFailure(env, error);
+    console.log(JSON.stringify({
+      event: "daily_summary_post_succeeded",
+      windowStartAt: summaryWindow.startAt,
+      windowEndAt: summaryWindow.endAt,
+      postId: post.id,
+      postCount,
+    }));
+  } catch (error) {
+    await recordFailure(env, executionWindow.endAt, error);
+  }
+}
+
+async function runScheduledPost(controller: ScheduledController, env: WorkerEnv): Promise<void> {
+  const window = postingWindowFor(controller.scheduledTime);
+  if (isPostingHour(window.jstHour)) {
+    await runHourlyPost(controller, env);
+  } else if (isDailySummaryHour(window.jstHour)) {
+    await runDailySummaryPost(controller.scheduledTime, env);
+  } else {
+    console.log(JSON.stringify({ event: "cron_outside_posting_hours", windowEndAt: window.endAt }));
   }
 }
 

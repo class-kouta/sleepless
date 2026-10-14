@@ -37,6 +37,18 @@ export function isPostingHour(jstHour: number): boolean {
   return jstHour >= 22 || jstHour <= 6;
 }
 
+export function isDailySummaryHour(jstHour: number): boolean {
+  return jstHour === 7;
+}
+
+/** Returns the previous night's JST 22:00-06:00 count range for the 07:00 summary. */
+export function dailySummaryWindowFor(scheduledTime: number): PostingWindow {
+  const executionWindow = postingWindowFor(scheduledTime);
+  const end = new Date(Date.parse(executionWindow.endAt) - 60 * 60 * 1000);
+  const start = new Date(end.getTime() - 8 * 60 * 60 * 1000);
+  return { startAt: start.toISOString(), endAt: end.toISOString(), jstHour: executionWindow.jstHour };
+}
+
 export function fixedMessage(jstHour: number): string {
   return `${jstHour}時。\n\nまだ眠れない夜を過ごしている人へ。\n\n今夜も、起きているのはあなただけではありません。`;
 }

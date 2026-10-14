@@ -8,8 +8,8 @@
     "TOKEN_CONTEXT": "sleepless-bot-production",
     "TOKEN_ACTIVE_KEY_ID": "v1"
   },
-  // Cron is evaluated in UTC. Every UTC hour is invoked; src/time.ts limits
-  // publishing to JST 22:00 through 06:00 (UTC 13:00 through 21:00).
+  // Cron is evaluated in UTC. Every UTC hour is invoked; src/time.ts publishes
+  // hourly at JST 22:00-06:00 and posts the daily summary at JST 07:00.
   "triggers": {
     "crons": ["0 * * * *"]
   },
