@@ -12,7 +12,7 @@
 
 | 項目 | 方針 |
 | --- | --- |
-| 配信方式 | **Cloudflare Workers の Static Assets**（Pagesではなく）。Cloudflareが新規プロジェクトにはWorkersを推奨しており、Phase 6の `/api/*` を同じWorkerに追加しやすい |
+| 配信方式 | **Cloudflare Workers の Static Assets**（Pagesではなく）。Cloudflareが新規プロジェクトにはWorkersを推奨しており、Phase 6の `/api/*` を同じWorkerに追加しやすい。詳細は[付録A](#付録a-workers-の静的配信と-pages-の違い) |
 | ドメイン取得先 | **`.com` などの汎用ドメインなら Cloudflare Registrar**。`.jp` が欲しい場合だけ XServerドメイン |
 | 公開の順序 | `workers.dev` で限定確認 → ドメイン取得 → カスタムドメイン接続 → 公開前チェック → 公開 |
 | 月額費用 | 配信は無料枠で0円。かかるのはドメイン代（年約1,700円前後）だけ |
@@ -352,3 +352,45 @@ Phase 6で `apps/api` などWorkerスクリプトを追加すると、スクリ�
 * **同じWorkerにまとめる**: `sleepless-web` に `main` を追加し、`assets.run_worker_first: ["/api/*"]` で `/api/*` だけWorkerスクリプトを先に実行する。
 
 `_headers` はWorkerスクリプトが返すレスポンスには適用されないため、APIのレスポンスヘッダーはWorkerのコード側で付ける。
+
+---
+
+## 付録A. Workers の静的配信と Pages の違い
+
+静的ページを置くだけなら、どちらも機能・料金はほぼ同じである。差が出るのは、Phase 6以降にAPIやD1を足すとき、既存Botとの運用の揃えやすさ、Cloudflareの今後の方針の3点である。
+
+### A.1 それぞれの位置付け
+
+* **Pages**: 静的サイト向けの製品。GitHubと接続するとビルド・デプロイを自動で行う。サーバー側の処理が必要な場合は、Pages Functions（`functions/` 配下のファイル名がそのままURLになる仕組み）を追加する。
+* **Workers の静的配信（Static Assets）**: プログラムを動かすWorkersに、静的ファイルを同梱して配信する方式。コードなしでファイルだけを配信でき、必要になったら同じWorkerにコードを足せる。
+
+Cloudflareは[Pagesのドキュメント](https://developers.cloudflare.com/pages/get-started/)の冒頭で「新しいプロジェクトはWorkersで始める」よう案内しており、[PagesからWorkersへの移行ガイド](https://developers.cloudflare.com/workers/static-assets/migration-guides/migrate-from-pages/)も公開している。Pagesは廃止予定ではないが、新機能はWorkers側に入っていく。
+
+### A.2 機能比較
+
+| | Workers の静的配信 | Pages |
+| --- | --- | --- |
+| 静的ファイル配信の料金 | 無料・無制限 | 無料・無制限 |
+| `_headers` / `_redirects` | 対応 | 対応 |
+| プレビューURL・ロールバック | あり | あり |
+| 設定方法 | `wrangler.jsonc`（Botと同じ） | Pages独自の設定（ダッシュボード中心） |
+| D1などのbinding | Botと同じ書き方 | Pages側で別途設定 |
+| Cron Triggers | 使える | 使えない |
+| `/api/*` など一部パスだけ処理を分ける | `run_worker_first`・ルートで可能 | Functionsのファイルベースのルーティングに限られる |
+| Workers Logs / Tail | あり | なし |
+| 段階的デプロイ（一部の利用者だけに新版を出す） | あり | なし |
+| Cloudflare以外でDNSを管理するドメインの接続 | **不可** | 可 |
+| GitHub連携の自動デプロイ | Workers Builds（後から設定） | 標準で組み込み |
+
+### A.3 Workersを選ぶ理由
+
+1. **Phase 6の `/api/*` を同一オリジンで素直に作れる。** 実装計画では、フロントエンドと同じドメインの `/api/counts/latest` でD1の最新件数を返す。Workersなら、同じWorkerに `run_worker_first: ["/api/*"]` でAPIを足す方法と、`apps/api` を別Workerにして `/api/*` のルートを割り当てる方法のどちらも使える（[13.](#13-phase-6-への接続)）。Pagesでも実現できるが、Pages Functionsという別の仕組みを覚える必要がある。
+2. **既存Botと同じ道具・手順で運用できる。** `apps/bot` はWorkersで動いている。Webも `wrangler.jsonc` で設定し、`wrangler deploy` でデプロイし、D1は `d1_databases` で接続し、障害時はWorkers Logsを見る、という手順に揃えられる。Pagesにすると、Webだけ設定画面・デプロイ方法・ログの見方が異なる。一人で運用する前提では、仕組みが少ないほど事故が減る。
+3. **Pagesの最大の利点が今回は効かない。** Pagesの明確な利点は、Cloudflare以外でDNSを管理するドメインも接続できることである。今回はCloudflare Registrarで取得する（XServerで取得する場合もネームサーバーはCloudflareへ向ける）ため、この差は関係しない。
+4. **後からの移行作業が不要になる。** Pagesで始めると、いずれWorkersへの移行を検討する可能性が高い。最初からWorkersにしておけばその手戻りがない。
+
+### A.4 Workersの弱点
+
+* GitHubへのpushで自動公開する仕組みは、Pagesの方が最初から手軽である。Workersでも Workers Builds で同じことができ、現状の規模なら手動の `npm run deploy` で十分である（[11.](#11-更新とロールバック)）。
+* 独自ドメインはCloudflareで管理するものに限られる（今回は問題にならない）。
+* Workerにコードを足すと、その実行回数がWorkersの無料枠（1日10万リクエスト）に数えられる。ただしPages Functionsも同じ枠を使うため差はない。静的ファイルの配信はどちらでも無料・無制限のままである。
