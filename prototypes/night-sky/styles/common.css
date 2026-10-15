@@ -21,6 +21,8 @@ body {
 }
 
 body {
+  display: flex;
+  flex-direction: column;
   min-height: 100dvh;
   color: var(--color-text);
   background-color: var(--color-bg);
@@ -32,7 +34,7 @@ body {
 .page {
   position: relative;
   z-index: 1;
-  min-height: 100dvh;
+  flex: 1;
   display: grid;
   place-items: center;
   padding: 2rem 1.25rem;
@@ -92,14 +94,95 @@ body {
   letter-spacing: 0.05em;
 }
 
-.credit {
-  position: fixed;
-  right: 0.75rem;
-  bottom: 0.5rem;
+a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+.footer {
+  position: relative;
   z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 0 1.25rem 2rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.footer p {
   margin: 0;
-  color: rgba(169, 176, 204, 0.6);
+}
+
+.footer-note {
+  max-width: 30rem;
+}
+
+.x-link {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--color-card-border);
+  border-radius: 50%;
+  background: var(--color-card);
+  color: var(--color-text);
+  transition: background-color 0.2s ease;
+}
+
+.x-link:hover,
+.x-link:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 1.25rem;
+  margin-top: 0.25rem;
+}
+
+.footer-small {
+  color: rgba(169, 176, 204, 0.7);
   font-size: 0.65rem;
+}
+
+.card-document {
+  width: min(100%, 36rem);
+  background: rgba(11, 16, 38, 0.6);
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.card-document h1 {
+  margin: 0 0 1.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.card-document h2 {
+  margin: 1.75rem 0 0.5rem;
+  color: var(--color-accent);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.card-document p {
+  margin: 0;
+}
+
+.card-document .meta {
+  margin-top: 2rem;
+}
+
+.card-document .back {
+  margin-top: 1.5rem;
+  text-align: center;
 }
 
 @keyframes fade-in {
