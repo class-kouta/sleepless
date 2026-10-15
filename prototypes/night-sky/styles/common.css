@@ -44,8 +44,6 @@ body {
   border: 1px solid var(--color-card-border);
   border-radius: 1.75rem;
   background: var(--color-card);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   text-align: center;
   animation: fade-in 2.4s ease-out both;
 }
