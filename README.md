@@ -18,7 +18,7 @@ Phase 4の動的投稿は本番反映済みです。Phase 5（投稿用OAuthト�
 
 ## 計画
 
-実装方針と各フェーズの完了条件は[実装計画](docs/BOT_IMPLEMENTATION_PLAN.md)を参照してください。
+実装方針と各フェーズの完了条件は[実装計画](docs/BOT_IMPLEMENTATION_PLAN.md)を参照してください。試作Webページを独自ドメインでCloudflareから配信する手順は[Cloudflare配信ガイド](docs/WEB_CLOUDFLARE_DEPLOY_GUIDE.md)にまとめています。
 
 ## ディレクトリ構成
 
