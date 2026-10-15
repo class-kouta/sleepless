@@ -92,10 +92,6 @@ body {
   letter-spacing: 0.05em;
 }
 
-.card a {
-  color: inherit;
-}
-
 .credit {
   position: fixed;
   right: 0.75rem;
