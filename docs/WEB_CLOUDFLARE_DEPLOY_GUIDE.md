@@ -13,7 +13,7 @@
 | 項目 | 方針 |
 | --- | --- |
 | 配信方式 | **Cloudflare Workers の Static Assets**（Pagesではなく）。Cloudflareが新規プロジェクトにはWorkersを推奨しており、Phase 6の `/api/*` を同じWorkerに追加しやすい。詳細は[付録A](#付録a-workers-の静的配信と-pages-の違い) |
-| ドメイン取得先 | **`.com` などの汎用ドメインなら Cloudflare Registrar**。`.jp` が欲しい場合だけ XServerドメイン |
+| ドメイン取得先 | **Cloudflare Registrar**（`.com` などの汎用ドメイン。`.jp` は非対応） |
 | 公開の順序 | `workers.dev` で限定確認 → ドメイン取得 → カスタムドメイン接続 → 公開前チェック → 公開 |
 | 月額費用 | 配信は無料枠で0円。かかるのはドメイン代（年約1,700円前後）だけ |
 
@@ -32,7 +32,7 @@
         ↓
 4. workers.dev へデプロイして実機確認（noindex付き）
         ↓
-5. ドメインを取得（Cloudflare Registrar 推奨）
+5. Cloudflare Registrar でドメインを取得
         ↓
 6. Worker にカスタムドメインを接続（HTTPS証明書は自動発行）
         ↓
@@ -43,48 +43,31 @@
 
 ---
 
-## 3. ドメインの取得先
+## 3. ドメイン（Cloudflare Registrar）
 
-### 3.1 料金比較（`.com`、1年あたり）
+ドメインはCloudflare Registrarで取得する。Botと同じCloudflareアカウントで管理でき、取得した時点でCloudflareのDNSで有効になるため、ネームサーバーの変更や反映待ちが要らない。Workersのカスタムドメインは、ネームサーバーがCloudflareで管理されているドメインでしか使えないので、この構成と相性が良い。
 
-| | Cloudflare Registrar | XServerドメイン |
-| --- | --- | --- |
-| 新規取得（1年目） | $10.46（約1,570円） | **0円**（同社サービスの利用履歴がない新規会員の1ドメインだけ）。条件外は1,721円 |
-| 更新（2年目以降） | **$10.46**（約1,570円）→ 2026-11-01から **$11.17**（約1,680円） | 1,721円 → 2026-11-09請求分から **1,750円** |
-| 移管 | 更新と同額（期限が1年延長） | 更新と同額 |
-| WHOIS情報の非公開 | 無料 | 無料（Whois代理公開） |
-| 価格の決まり方 | レジストリ原価＋ICANN手数料。上乗せなし。原価が上がった分だけ上がる | 独自価格。キャンペーンで変動 |
-| 支払い | 米ドル（クレジットカード / PayPal）。カード会社の海外事務手数料が別途かかる場合あり | 日本円 |
-| `.jp` | **取得・移管とも不可** | 可（更新3,102円） |
+### 3.1 料金（`.com`、1年あたり）
 
-円換算は1ドル=150円で計算した目安。Cloudflare側は為替次第で上下するため、更新料の差は年100円前後で、ほぼ同等と考えてよい。
+| 項目 | 内容 |
+| --- | --- |
+| 新規取得・更新 | $10.46（約1,570円）→ 2026-11-01から **$11.17**（約1,680円） |
+| 価格の決まり方 | レジストリ原価＋ICANN手数料。上乗せなし。原価が上がった分だけ上がる |
+| WHOIS情報の非公開 | 無料 |
+| 支払い | 米ドル（クレジットカード / PayPal）。カード会社の海外事務手数料が別途かかる場合あり |
+
+円換算は1ドル=150円で計算した目安で、為替次第で上下する。
 
 参考:
 
 * [Cloudflare Registrar（料金）](https://domains.cloudflare.com/)
 * [Cloudflare TLDポリシー（対応TLD一覧）](https://www.cloudflare.com/ja-jp/tld-policies/)
 * [.com 卸値改定（2026-11-01、ICANN）](https://itp.cdn.icann.org/en/files/registry-agreements/com/com-fees-01-11-2026-en.pdf)
-* [XServerドメイン 価格一覧](https://www.xdomain.ne.jp/domain/price.php)
-* [XServerドメイン 更新・移管料金の改定（2026-11-09）](https://www.xdomain.ne.jp/news_detail.php?view_id=19639)
 
-### 3.2 運用面の違い
+### 3.2 制約
 
-| | Cloudflare Registrar | XServerドメイン |
-| --- | --- | --- |
-| ネームサーバー変更 | 不要。取得した時点でCloudflareのDNSで有効になる | 必要。Cloudflareのネームサーバーへ変更し、反映（最大24〜48時間）を待つ |
-| 管理画面 | Botと同じCloudflareアカウントで完結 | XServerアカウントとCloudflareの2か所 |
-| ネームサーバーの自由度 | Cloudflare以外へ変更できない（変えたい場合は他社へ移管） | 自由 |
-| Workersのカスタムドメイン | そのまま使える | ネームサーバーをCloudflareへ向けた後なら使える |
-
-Workersのカスタムドメインは、**ネームサーバーがCloudflareで管理されているドメインでしか使えない**。どちらで取得しても最終的にDNSはCloudflareに置くことになるため、Cloudflare Registrarならその手間が丸ごと省ける。
-
-### 3.3 推奨
-
-1. **`.com` / `.net` / `.app` / `.dev` などで良い → Cloudflare Registrar で取得する。** 更新料が原価で、将来も値上げは原価分だけ。DNS設定の手間と待ち時間もない。
-2. **1年目を0円にしたい → XServerドメインで取得し、ネームサーバーだけCloudflareへ向ける。** 2年目以降も安く維持したければ、取得から60日経過後（ICANNの移管制限）にCloudflare Registrarへ移管できる。移管料は1年分の更新料と同額で、期限も1年延びるので損はない。
-3. **`.jp` にしたい → XServerドメイン一択**（Cloudflare Registrarは非対応）。DNSだけCloudflareへ向ける。
-
-差額は初年度の約1,600円だけで、2年目以降はほぼ同じ。手順が少なく、Botと同じアカウントで管理できる **1. を推奨** する。
+* **`.jp` は取得できない。** `.com` / `.net` / `.app` / `.dev` などの汎用ドメインから選ぶ。検索結果に出ないTLDは登録できない。
+* **ネームサーバーはCloudflare以外へ変更できない。** 将来DNSを他社へ移したくなった場合は、ドメインごと他社へ移管する。
 
 ---
 
@@ -234,8 +217,6 @@ npm run deploy
 
 使うホスト名を先に決める。例: `sleepless-xxx.com`（ルートドメインで配信し、`www` はルートへ転送する）。
 
-### 7.1 Cloudflare Registrar で取得する場合（推奨）
-
 1. Cloudflareダッシュボード → **ドメインの登録（Domain Registration）** → **ドメインを登録（Register Domains）**。
 2. 希望のドメイン名を検索し、TLDと年数を選ぶ。
 3. 登録者情報（氏名・住所・メールアドレス）を入力する。WHOISでは自動的に非公開になる。
@@ -243,23 +224,11 @@ npm run deploy
 5. ICANNの規定により、登録者メールアドレスの確認メールが届くので、期限内にリンクを開く（放置するとドメインが停止される）。
 6. 購入したドメインがCloudflareのゾーン（Webサイト一覧）に自動で追加され、すぐにDNSが有効になる。
 
-### 7.2 XServerドメインで取得する場合
-
-1. XServerドメインで取得する（初回0円の条件を確認）。自動更新を有効にする。
-2. Cloudflareダッシュボード → **ドメインを追加（Onboard a domain）** → 取得したドメインを入力 → **Freeプラン** を選ぶ。
-3. Cloudflareに表示される2つのネームサーバー（`xxx.ns.cloudflare.com`）を控える。
-4. XServerアカウント → **ドメイン** → 対象ドメインの **ネームサーバー設定** → 「その他のネームサーバーを使用」で、3.の2つを入力する。
-5. DNSSECを有効にしている場合は、変更前にXServer側で無効にしておく（有効のまま変更すると名前解決できなくなる）。
-6. Cloudflareでゾーンが **Active** になるまで待つ（通常数分〜数時間、最大48時間）。Activeになったらメールで通知される。
-7. 安定したら、Cloudflareの **DNS → 設定** でDNSSECを有効にし、表示されたDSレコードをXServer側に登録する（任意）。
-
-取得から60日経過後にCloudflare Registrarへ移管する場合は、XServer側でドメインロックを解除して認証コード（AuthCode）を取得し、Cloudflareダッシュボードの **ドメインの移管（Transfer Domains）** で申請する。
-
 ---
 
 ## 8. カスタムドメインの接続
 
-ゾーンがActiveになったら、Workerにドメインを接続する。DNSレコードとHTTPS証明書はCloudflareが自動で作成する。
+ドメインを取得したら、Workerにドメインを接続する。DNSレコードとHTTPS証明書はCloudflareが自動で作成する。
 
 `wrangler.jsonc` に `routes` を追加して再デプロイする。
 
@@ -338,7 +307,7 @@ GitHubへのpushで自動デプロイしたい場合は、**Workers Builds**（W
 | Workers Static Assets（静的ファイルの配信） | 0円（静的ファイルへのリクエストは無料・無制限） |
 | HTTPS証明書（Universal SSL） | 0円 |
 | DNS（Freeプラン） | 0円 |
-| ドメイン（`.com`） | Cloudflare: 年$10.46（2026-11-01から$11.17）／ XServer: 初年0円、更新1,721円（2026-11-09から1,750円） |
+| ドメイン（`.com`、Cloudflare Registrar） | 年$10.46（2026-11-01から$11.17） |
 
 Phase 6で `apps/api` などWorkerスクリプトを追加すると、スクリプトの実行回数がWorkersの無料枠（1日10万リクエスト）の対象になる。
 
@@ -386,7 +355,7 @@ Cloudflareは[Pagesのドキュメント](https://developers.cloudflare.com/page
 
 1. **Phase 6の `/api/*` を同一オリジンで素直に作れる。** 実装計画では、フロントエンドと同じドメインの `/api/counts/latest` でD1の最新件数を返す。Workersなら、同じWorkerに `run_worker_first: ["/api/*"]` でAPIを足す方法と、`apps/api` を別Workerにして `/api/*` のルートを割り当てる方法のどちらも使える（[13.](#13-phase-6-への接続)）。Pagesでも実現できるが、Pages Functionsという別の仕組みを覚える必要がある。
 2. **既存Botと同じ道具・手順で運用できる。** `apps/bot` はWorkersで動いている。Webも `wrangler.jsonc` で設定し、`wrangler deploy` でデプロイし、D1は `d1_databases` で接続し、障害時はWorkers Logsを見る、という手順に揃えられる。Pagesにすると、Webだけ設定画面・デプロイ方法・ログの見方が異なる。一人で運用する前提では、仕組みが少ないほど事故が減る。
-3. **Pagesの最大の利点が今回は効かない。** Pagesの明確な利点は、Cloudflare以外でDNSを管理するドメインも接続できることである。今回はCloudflare Registrarで取得する（XServerで取得する場合もネームサーバーはCloudflareへ向ける）ため、この差は関係しない。
+3. **Pagesの最大の利点が今回は効かない。** Pagesの明確な利点は、Cloudflare以外でDNSを管理するドメインも接続できることである。今回はCloudflare Registrarで取得し、DNSもCloudflareで管理するため、この差は関係しない。
 4. **後からの移行作業が不要になる。** Pagesで始めると、いずれWorkersへの移行を検討する可能性が高い。最初からWorkersにしておけばその手戻りがない。
 
 ### A.4 Workersの弱点
