@@ -1,10 +1,10 @@
 # 試作Webページ Cloudflare配信ガイド
 
-最終更新: 2026-10-15
+最終更新: 2026-10-16
 
 `prototypes/night-sky/` の試作ページ（HTML・CSS・画像だけの静的サイト）を、独自ドメインでCloudflareから配信するまでの流れをまとめる。
 
-価格・仕様は2026-10-15時点の公式ページ等で確認した値であり、作業前に必ず最新の表示を確認すること。
+価格・仕様は2026-10-16時点の公式ページ等で確認した値であり、作業前に必ず最新の表示を確認すること。
 
 ---
 
@@ -14,7 +14,8 @@
 | --- | --- |
 | 配信方式 | **Cloudflare Workers の Static Assets**（Pagesではなく）。Cloudflareが新規プロジェクトにはWorkersを推奨しており、Phase 6の `/api/*` を同じWorkerに追加しやすい。詳細は[付録A](#付録a-workers-の静的配信と-pages-の違い) |
 | ドメイン取得先 | **Cloudflare Registrar**（`.com` などの汎用ドメイン。`.jp` は非対応） |
-| 公開の順序 | `workers.dev` で限定確認 → ドメイン取得 → カスタムドメイン接続 → 公開前チェック → 公開 |
+| デプロイ | **初回だけ手動**。以後はGitHub連携で `main` へのマージ時に本番へ自動デプロイし、作業ブランチへのpushごとにPreview（検証URL）を自動作成する |
+| 公開の順序 | `workers.dev` で限定確認 → 自動デプロイ設定 → ドメイン取得 → カスタムドメイン接続 → 公開前チェック → 公開 |
 | 月額費用 | 配信は無料枠で0円。かかるのはドメイン代（年約1,700円前後）だけ |
 
 試作ページの件数（1,284件）と時刻はダミー値である。実データと誤認される状態で一般公開しないよう、[5. 公開範囲の注意](#5-試作段階の公開範囲の注意)に従う。
@@ -30,15 +31,26 @@
         ↓
 3. ローカルで表示確認（wrangler dev）
         ↓
-4. workers.dev へデプロイして実機確認（noindex付き）
+4. 【初回だけ手動】workers.dev へデプロイして実機確認（noindex付き）
         ↓
-5. Cloudflare Registrar でドメインを取得
+5. GitHubリポジトリを接続し、自動デプロイとPreviewを有効化
         ↓
-6. Worker にカスタムドメインを接続（HTTPS証明書は自動発行）
+6. Cloudflare Registrar でドメインを取得
         ↓
-7. HTTPS強制・www転送などのゾーン設定
+7. Worker にカスタムドメインを接続（HTTPS証明書は自動発行）
         ↓
-8. 公開前チェック → noindex を外して公開
+8. HTTPS強制・www転送などのゾーン設定
+        ↓
+9. 公開前チェック → noindex を外して公開
+```
+
+デプロイは初回だけ手元から `npm run deploy` で行い、Workerを作成する。2回目以降は手動デプロイをせず、次の流れに統一する（[7.](#7-自動デプロイとpreview)）。
+
+```text
+作業ブランチへpush ──▶ Preview（ブランチ専用の検証URL）を自動作成・更新し、PRにURLをコメント
+        │
+        ▼ PRをmainへマージ
+main へpush ─────────▶ 本番へ自動デプロイ
 ```
 
 ---
@@ -77,7 +89,8 @@
 
 * Botで使っているCloudflareアカウントをそのまま使う（`sleepless-bot.workers.dev` のサブドメインを持つアカウント）。
 * ドメインと課金情報を扱うため、Cloudflareアカウントの2段階認証を有効にしておく。
-* `wrangler` は `apps/bot` と同じバージョン（`4.70.0`）を使う。ログイン済みか確認する。
+* `wrangler` は **4.136.3以上** を使う。Previewを作る `wrangler preview` コマンドは4.135.0以上が必要で、Cloudflareの資料では4.136.3以上が推奨されている。`apps/bot` の `4.70.0` は対応していないため、Web側だけ新しいバージョンを固定する（Botの更新は別途判断する）。
+* 手元の `wrangler` がCloudflareにログイン済みか確認する。
 
 ```sh
 cd apps/bot
@@ -100,6 +113,7 @@ apps/web-vanilla-js/
 │       ├── common.css
 │       └── photo.css
 ├── package.json
+├── package-lock.json       # 自動デプロイ時の依存インストールに使うため、必ずコミットする
 └── wrangler.jsonc
 ```
 
@@ -124,11 +138,17 @@ cp -R prototypes/night-sky/. apps/web-vanilla-js/public/
     "not_found_handling": "404-page"
   },
   // カスタムドメインを接続するまでは workers.dev で確認する。
-  "workers_dev": true
+  "workers_dev": true,
+  // Preview の workers.dev URL を有効にする。workers_dev を false にした後も維持する。
+  "preview_urls": true,
+  // Preview は本番の設定を引き継がない。静的ファイルだけなので空でよい。
+  "previews": {}
 }
 ```
 
 * `not_found_handling: "404-page"` は `public/404.html` があればそれを返す。なければ省略してよい。
+* `previews` ブロックは `wrangler preview` に必須。`assets` と `compatibility_date` はトップレベルの値がPreviewにも使われる。
+* `preview_urls` を省略すると、`workers_dev` が `false` のWorkerではPreviewの `workers.dev` URLが無効になる場合があるため、明示的に `true` にしておく。
 * 既定の `html_handling`（`auto-trailing-slash`）により、`/privacy.html` へのアクセスは `/privacy` へ転送される。既存のリンクはそのまま動く。
 
 ### 4.4 `package.json`
@@ -140,10 +160,11 @@ cp -R prototypes/night-sky/. apps/web-vanilla-js/public/
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "preview": "wrangler preview"
   },
   "devDependencies": {
-    "wrangler": "4.70.0"
+    "wrangler": "4.151.1"
   }
 }
 ```
@@ -197,7 +218,9 @@ npm run dev
 
 ---
 
-## 6. workers.dev へのデプロイ
+## 6. 初回デプロイ（手動）
+
+初回だけ手元からデプロイしてWorker `sleepless-web` を作成する。以後の手動デプロイは行わない。
 
 ```sh
 cd apps/web-vanilla-js
@@ -213,7 +236,63 @@ npm run deploy
 
 ---
 
-## 7. ドメインの取得
+## 7. 自動デプロイとPreview
+
+初回デプロイの後、Workers Builds（Cloudflareの自動ビルド機能）にGitHubリポジトリを接続する。以後は次のように動く。
+
+| pushしたブランチ | 実行されるコマンド | 結果 |
+| --- | --- | --- |
+| `main` | `npx wrangler deploy` | 本番へデプロイ |
+| `main` 以外 | `npx wrangler preview` | そのブランチ専用のPreviewを作成・更新し、PRにURLをコメント |
+
+`apps/web-vanilla-js/` 以外（Botやドキュメント）だけを変更したpushではビルドしない（[7.2](#72-ビルドの設定)のビルド監視パス）。
+
+### 7.1 リポジトリの接続
+
+1. Cloudflareダッシュボード → **Workers & Pages** → `sleepless-web` → **設定** → **ビルド** → **接続**。
+2. GitHubアカウントを選び、Cloudflare Workers and Pages のGitHub Appに `class-kouta/sleepless` へのアクセスを許可する（このリポジトリだけを選ぶ）。
+3. リポジトリ `class-kouta/sleepless` とブランチ `main` を選ぶ。
+
+### 7.2 ビルドの設定
+
+**設定 → ビルド** で次のように設定する。
+
+| 項目 | 値 |
+| --- | --- |
+| Git ブランチ（本番ブランチ） | `main` |
+| ルートディレクトリ | `apps/web-vanilla-js` |
+| ビルドコマンド | 空欄（ビルド工程がない。依存は `package-lock.json` から自動でインストールされる） |
+| デプロイコマンド | `npx wrangler deploy` |
+| Preview Buildsを有効にする（ブランチ制御） | オン |
+| Previewコマンド | `npx wrangler preview`（既定値のまま） |
+| ビルド監視パス（含める） | `apps/web-vanilla-js/*` |
+| ビルド監視パス（除外する） | 空欄 |
+
+既存のWorkerにあとからリポジトリを接続した場合、ビルド設定に **Worker Previewsのセットアップ** の案内が出ることがある。その場合は案内に従って **Worker Previewsに切り替える** を選ぶ（Previewコマンドが `npx wrangler preview` になる）。
+
+### 7.3 Preview のURL
+
+PRを作るとCloudflareがビルド結果とURLを2つコメントする。
+
+| URL | 形式 | 用途 |
+| --- | --- | --- |
+| Preview URL | `<ブランチ名>-sleepless-web.<サブドメイン>.workers.dev` | ブランチの最新版を常に表示する。追加でpushしても変わらない |
+| Deployment URL | `<デプロイID>-sleepless-web.<サブドメイン>.workers.dev` | そのデプロイ1回分を固定で表示する。前の版との比較用 |
+
+* `workers.dev` のPreview URLには `X-Robots-Tag: noindex` が自動で付き、検索エンジンに載らない。
+* Preview URLは知っていれば誰でも開ける。限定したい場合は、Workerの設定でPreviewに **Cloudflare Access** をかけ、自分のメールアドレスだけを許可する。
+* 無料プランではPreviewは1 Workerあたり100個まで。超えると最も古いものから自動で削除される。手動で消す場合は `npx wrangler preview delete --name <Preview名>`。
+
+### 7.4 運用ルール
+
+* `main` へ直接pushしない。作業ブランチ → PR → Previewで確認 → マージ、の順にする。`main` への直接pushは即本番に出る。GitHubのブランチ保護で `main` への直接pushを禁止しておくとよい。
+* マージ後、Cloudflareの **デプロイ** 一覧とGitHubのチェック表示で本番デプロイの成功を確認する。
+* Phase 6でD1などのbindingを追加するときは、`previews` ブロックに **ステージング用D1** を書く。Previewは本番の設定を引き継がないため、書き忘れるとbinding不足の警告が出る。本番D1を書くと検証環境から本番データを読み書きしてしまう。
+* Cron TriggersはPreviewでは動かない。Botの定期実行は従来どおり `sleepless-bot-staging` で検証する。
+
+---
+
+## 8. ドメインの取得
 
 使うホスト名を先に決める。例: `sleepless-xxx.com`（ルートドメインで配信し、`www` はルートへ転送する）。
 
@@ -226,11 +305,11 @@ npm run deploy
 
 ---
 
-## 8. カスタムドメインの接続
+## 9. カスタムドメインの接続
 
 ドメインを取得したら、Workerにドメインを接続する。DNSレコードとHTTPS証明書はCloudflareが自動で作成する。
 
-`wrangler.jsonc` に `routes` を追加して再デプロイする。
+作業ブランチで `wrangler.jsonc` に `routes` を追加し、PRを `main` へマージする（マージ時の自動デプロイで反映される）。
 
 ```jsonc
 {
@@ -238,21 +317,18 @@ npm run deploy
   "routes": [
     { "pattern": "sleepless-xxx.com", "custom_domain": true }
   ],
-  "workers_dev": false
+  "workers_dev": false,
+  "preview_urls": true
 }
 ```
 
-```sh
-npm run deploy
-```
+ダッシュボードの **Workers & Pages → sleepless-web → 設定 → ドメインとルート → 追加 → カスタムドメイン** でも接続できるが、次の自動デプロイで `wrangler.jsonc` の内容に戻らないよう、設定は `wrangler.jsonc` 側に揃える。
 
-ダッシュボードで行う場合は **Workers & Pages → sleepless-web → 設定 → ドメインとルート → 追加 → カスタムドメイン**。
-
-既存のDNSレコード（A / CNAME）が同じホスト名にあると接続に失敗するので、先に削除しておく。`workers_dev: false` にすると `workers.dev` のURLは無効になり、配信先が独自ドメインに一本化される。
+既存のDNSレコード（A / CNAME）が同じホスト名にあると接続に失敗するので、先に削除しておく。`workers_dev: false` にすると本番の `workers.dev` のURLは無効になり、配信先が独自ドメインに一本化される。`preview_urls: true` を残しておけば、Previewの `workers.dev` URLは引き続き使える。
 
 ---
 
-## 9. ゾーンの設定
+## 10. ゾーンの設定
 
 Cloudflareダッシュボードの対象ドメインで設定する。
 
@@ -270,7 +346,7 @@ Cloudflareダッシュボードの対象ドメインで設定する。
 
 ---
 
-## 10. 公開前チェック
+## 11. 公開前チェック
 
 * [ ] 件数がダミーではない、または「サンプル」と明記されている（[5.](#5-試作段階の公開範囲の注意)）
 * [ ] `https://ドメイン/` と `https://ドメイン/privacy` が表示される
@@ -281,26 +357,29 @@ Cloudflareダッシュボードの対象ドメインで設定する。
 * [ ] フッターの写真クレジット（NPS / Jacob W. Frank）が残っている
 * [ ] ドメインの自動更新が有効で、登録者メールアドレスの確認が済んでいる
 
-すべて満たしたら、`_headers` から `X-Robots-Tag: noindex` を削除して再デプロイする。Xのプロフィールに載せるのはこの後にする。
+すべて満たしたら、作業ブランチで `_headers` から `X-Robots-Tag: noindex` を削除し、PRを `main` へマージする。Xのプロフィールに載せるのはこの後にする。
 
 ---
 
-## 11. 更新とロールバック
+## 12. 更新とロールバック
+
+通常の更新は [7.4](#74-運用ルール) のとおり、PRのマージによる自動デプロイだけで行う。
+
+本番で問題が出た場合は、まず直前のバージョンへ戻して被害を止め、その後に修正する。
 
 ```sh
 cd apps/web-vanilla-js
-npm run deploy                 # 更新
 npx wrangler deployments list  # デプロイ履歴
 npx wrangler rollback          # 直前のバージョンへ戻す
 ```
 
 ダッシュボードの **Workers & Pages → sleepless-web → デプロイ** からも、過去のバージョンへ戻せる。
 
-GitHubへのpushで自動デプロイしたい場合は、**Workers Builds**（Workerの設定 → ビルド → リポジトリを接続）でこのリポジトリを接続し、ルートディレクトリを `apps/web-vanilla-js`、デプロイコマンドを `npx wrangler deploy` にする。mainブランチ以外のpushはプレビューURLとして配信できる。最初は手動デプロイで十分。
+ロールバックはCloudflare上の配信だけを戻し、`main` のコードは戻らない。そのままだと次のマージで問題のある変更が再び本番に出るため、続けて原因のコミットをrevertするPRを作ってマージする。
 
 ---
 
-## 12. 費用のまとめ
+## 13. 費用のまとめ
 
 | 項目 | 費用 |
 | --- | --- |
@@ -308,12 +387,13 @@ GitHubへのpushで自動デプロイしたい場合は、**Workers Builds**（W
 | HTTPS証明書（Universal SSL） | 0円 |
 | DNS（Freeプラン） | 0円 |
 | ドメイン（`.com`、Cloudflare Registrar） | 年$10.46（2026-11-01から$11.17） |
+| Workers Builds（自動デプロイ・Preview） | 0円（無料プランのビルド枠内） |
 
 Phase 6で `apps/api` などWorkerスクリプトを追加すると、スクリプトの実行回数がWorkersの無料枠（1日10万リクエスト）の対象になる。
 
 ---
 
-## 13. Phase 6 への接続
+## 14. Phase 6 への接続
 
 実データ表示（Phase 6）では、同じオリジンの `/api/*` をAPIで処理する。方法は次の2通りで、どちらでもフロントエンドの配信設定は大きく変わらない。
 
@@ -341,7 +421,7 @@ Cloudflareは[Pagesのドキュメント](https://developers.cloudflare.com/page
 | --- | --- | --- |
 | 静的ファイル配信の料金 | 無料・無制限 | 無料・無制限 |
 | `_headers` / `_redirects` | 対応 | 対応 |
-| プレビューURL・ロールバック | あり | あり |
+| ブランチごとのPreview・ロールバック | あり | あり |
 | 設定方法 | `wrangler.jsonc`（Botと同じ） | Pages独自の設定（ダッシュボード中心） |
 | D1などのbinding | Botと同じ書き方 | Pages側で別途設定 |
 | Cron Triggers | 使える | 使えない |
@@ -353,13 +433,13 @@ Cloudflareは[Pagesのドキュメント](https://developers.cloudflare.com/page
 
 ### A.3 Workersを選ぶ理由
 
-1. **Phase 6の `/api/*` を同一オリジンで素直に作れる。** 実装計画では、フロントエンドと同じドメインの `/api/counts/latest` でD1の最新件数を返す。Workersなら、同じWorkerに `run_worker_first: ["/api/*"]` でAPIを足す方法と、`apps/api` を別Workerにして `/api/*` のルートを割り当てる方法のどちらも使える（[13.](#13-phase-6-への接続)）。Pagesでも実現できるが、Pages Functionsという別の仕組みを覚える必要がある。
+1. **Phase 6の `/api/*` を同一オリジンで素直に作れる。** 実装計画では、フロントエンドと同じドメインの `/api/counts/latest` でD1の最新件数を返す。Workersなら、同じWorkerに `run_worker_first: ["/api/*"]` でAPIを足す方法と、`apps/api` を別Workerにして `/api/*` のルートを割り当てる方法のどちらも使える（[14.](#14-phase-6-への接続)）。Pagesでも実現できるが、Pages Functionsという別の仕組みを覚える必要がある。
 2. **既存Botと同じ道具・手順で運用できる。** `apps/bot` はWorkersで動いている。Webも `wrangler.jsonc` で設定し、`wrangler deploy` でデプロイし、D1は `d1_databases` で接続し、障害時はWorkers Logsを見る、という手順に揃えられる。Pagesにすると、Webだけ設定画面・デプロイ方法・ログの見方が異なる。一人で運用する前提では、仕組みが少ないほど事故が減る。
 3. **Pagesの最大の利点が今回は効かない。** Pagesの明確な利点は、Cloudflare以外でDNSを管理するドメインも接続できることである。今回はCloudflare Registrarで取得し、DNSもCloudflareで管理するため、この差は関係しない。
 4. **後からの移行作業が不要になる。** Pagesで始めると、いずれWorkersへの移行を検討する可能性が高い。最初からWorkersにしておけばその手戻りがない。
 
 ### A.4 Workersの弱点
 
-* GitHubへのpushで自動公開する仕組みは、Pagesの方が最初から手軽である。Workersでも Workers Builds で同じことができ、現状の規模なら手動の `npm run deploy` で十分である（[11.](#11-更新とロールバック)）。
+* GitHubへのpushで自動公開する仕組みは、Pagesの方が最初から組み込まれていて手軽である。Workersでは初回デプロイの後に Workers Builds を接続する一手間が要るが、接続後はブランチごとのPreviewとPRへのURLコメントまでPagesと同等に使える（[7.](#7-自動デプロイとpreview)）。
 * 独自ドメインはCloudflareで管理するものに限られる（今回は問題にならない）。
 * Workerにコードを足すと、その実行回数がWorkersの無料枠（1日10万リクエスト）に数えられる。ただしPages Functionsも同じ枠を使うため差はない。静的ファイルの配信はどちらでも無料・無制限のままである。
