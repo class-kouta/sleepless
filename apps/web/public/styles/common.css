@@ -60,6 +60,7 @@ body {
 .lead {
   margin: 0;
   font-size: 1rem;
+  white-space: pre-line;
 }
 
 .count {
@@ -81,6 +82,7 @@ body {
 .message {
   margin: 1.75rem 0 0;
   font-size: 1.05rem;
+  white-space: pre-line;
 }
 
 .phrase {
@@ -92,6 +94,13 @@ body {
   color: var(--color-text-muted);
   font-size: 0.75rem;
   letter-spacing: 0.05em;
+}
+
+.status {
+  min-height: 1.7em;
+  margin: 1.25rem 0 0;
+  color: var(--color-accent);
+  font-size: 0.75rem;
 }
 
 a {

@@ -1,11 +1,28 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sleepless-web",
+  "main": "src/index.js",
   "compatibility_date": "2026-10-15",
   "assets": {
-    "directory": "./public"
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
   },
+  "services": [
+    {
+      "binding": "API",
+      "service": "sleepless-api",
+      "remote": true
+    }
+  ],
   "workers_dev": true,
   "preview_urls": true,
-  "previews": {}
+  "previews": {
+    "services": [
+      {
+        "binding": "API",
+        "service": "sleepless-api"
+      }
+    ]
+  }
 }

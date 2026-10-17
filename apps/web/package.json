@@ -2,10 +2,12 @@
   "name": "@sleepless/web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "preview": "wrangler preview"
+    "preview": "wrangler preview",
+    "test": "node --test"
   },
   "devDependencies": {
     "wrangler": "4.151.1"

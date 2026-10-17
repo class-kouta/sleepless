@@ -12,12 +12,13 @@
   <body>
     <main class="page">
       <section class="card">
-        <p class="time">午前2:14</p>
-        <p class="lead">この1時間で<br />「眠れない」という投稿が</p>
-        <p class="count">1,284<span class="count-unit">件</span></p>
-        <p class="lead">ありました。</p>
-        <p class="message">今夜も、<br /><span class="phrase">眠れないのは</span><span class="phrase">あなただけではありません。</span></p>
-        <p class="meta">対象: 01:00–02:00 JST ／ 更新: 02:01 JST</p>
+        <p class="time" id="current-time">現在時刻を確認中</p>
+        <p class="lead" id="count-label">投稿件数を読み込んでいます</p>
+        <p class="count"><span id="count-value">—</span><span class="count-unit">件</span></p>
+        <p class="lead" id="count-suffix" hidden>ありました。</p>
+        <p class="message" id="companion-message">眠れない時間を過ごしているのは<br />あなただけではありません。</p>
+        <p class="status" id="count-status" role="status" aria-live="polite"></p>
+        <p class="meta" id="count-meta">集計データを取得しています</p>
       </section>
     </main>
     <footer class="footer">
@@ -42,5 +43,6 @@
         © 2026 Sleepless
       </p>
     </footer>
+    <script type="module" src="scripts/main.js"></script>
   </body>
 </html>

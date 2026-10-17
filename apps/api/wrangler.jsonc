@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sleepless-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-15",
+  "workers_dev": false,
+  "d1_databases": [
+    {
+      "binding": "BOT_DB",
+      "database_name": "sleepless-bot",
+      "database_id": "f396ec04-4f7e-408c-a7c4-9c49e3123c92"
+    }
+  ]
+}
