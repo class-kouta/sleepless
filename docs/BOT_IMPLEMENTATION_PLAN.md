@@ -57,7 +57,7 @@
 1. X Botを最小構成で動かす
 2. Botを自動化する
 3. X上の「眠れない」投稿数をBotに表示する
-4. HTML・Tailwind CSS・素のJavaScriptでWebアプリを作る
+4. HTML・素のCSS・素のJavaScriptでWebアプリを作る
 5. Webアプリ独自の「今ここにいる人」機能を追加する
 6. PWA化する
 7. 利用状況を見ながら機能・収益化を検討する
@@ -89,8 +89,7 @@ sleepless/
 ├── apps/
 │   ├── bot/
 │   ├── api/
-│   ├── web-vanilla-js/
-│   └── web-react/
+│   └── web/
 │
 ├── docs/
 │   └── BOT_IMPLEMENTATION_PLAN.md
@@ -127,21 +126,17 @@ sleepless/
 ## 3.3 Webアプリ
 
 * HTML
-* Tailwind CSS
+* CSS（フレームワークなし）
 * JavaScript（フレームワークなし）
 * Cloudflare
 * Cloudflare Workers
 * Cloudflare D1（Phase 3で、投稿の冪等性のため先行導入する）
 
-必要になった場合のみ以下を追加する。
+React等のフロントエンドフレームワークは使わず、素のJavaScriptを標準とする。フロントエンドは `apps/web` の1つだけを管理する。
 
-* React
-* TypeScript
-* React Router
-* TanStack Query
-* Zod
-
-MVPでは画面が少なく、API呼び出しとDOM更新だけで要件を満たすため、Reactは導入しない。`web-vanilla-js` を本番版、`web-react` をReactの練習・検証版として別々に管理し、同じAPI契約を利用する。React版を十分に検証できた時点で、本番URLの配信先を切り替える。
+* フレームワークのメジャーアップデートのたびに追従する保守コストを避ける。
+* 画面が少なく、API呼び出しとDOM更新だけで要件を満たせる。
+* `fetch`、ES Modules、`localStorage` などブラウザ標準のAPIだけで実装する。ライブラリを追加する場合も、同じ理由で必要性を検討し最小限にする。
 
 ---
 
@@ -848,7 +843,7 @@ Xを開かなくても「眠れない仲間がいる」ことを確認できる�
 
 ## 10.1 Webアプリ全体の構成
 
-フロントエンドを二重に実装しても、API・データベース・Botは共通化する。公開中の本番実装は常に1つだけとする。
+フロントエンドは `apps/web` の1つだけとし、API・データベース・BotとはWorkerを分けて管理する。
 
 ```text
 sleepless/
@@ -858,88 +853,69 @@ sleepless/
 │   │   └── src/
 │   │       ├── counts.js
 │   │       └── presence.js
-│   ├── web-vanilla-js/              # MVPとして先に公開する版
-│   │   ├── index.html
-│   │   ├── package.json
-│   │   ├── tailwind.config.js
-│   │   └── src/
-│   │       ├── main.js
-│   │       ├── api/
-│   │       ├── views/
-│   │       ├── lib/
-│   │       └── styles/input.css
-│   └── web-react/                   # React学習・検証用。後で追加
-│       ├── index.html
+│   └── web/                         # Webフロントエンド（素のHTML・CSS・JavaScript）
+│       ├── public/                  # ビルドせず、この中身をそのまま配信する
+│       │   ├── index.html
+│       │   ├── privacy.html
+│       │   ├── _headers
+│       │   ├── images/
+│       │   ├── styles/
+│       │   │   └── common.css
+│       │   └── scripts/
+│       │       ├── main.js
+│       │       ├── api/
+│       │       ├── views/
+│       │       └── lib/
 │       ├── package.json
-│       └── src/
-│           ├── main.jsx
-│           ├── App.jsx
-│           ├── api/
-│           ├── components/
-│           ├── hooks/
-│           ├── lib/
-│           └── styles/input.css
+│       └── wrangler.jsonc
 │
 └── docs/
 ```
 
-`apps/api` はCloudflare Workerとして配信し、D1へ接続する。2つのフロントエンドは同じAPI URL・リクエスト形式・レスポンス形式を使う。API仕様を変えるときは、両方を同時に確認するか、後方互換性を保つ。
+`apps/api` はCloudflare Workerとして配信し、D1へ接続する。API仕様を変えるときは、`apps/web` を同時に更新するか、後方互換性を保つ。
 
-## 10.2 Vanilla JavaScript版の実装方針
+## 10.2 フロントエンドの実装方針
 
-技術はHTML、Tailwind CSS、素のJavaScriptとする。Tailwind CSSはCLIでビルドし、生成したCSSを静的アセットとして配信する。React、Vite、TypeScript、ルーティングライブラリはこのフェーズでは導入しない。
+技術はHTML、素のCSS、素のJavaScriptとする。ビルド工程は設けず、`public/` のファイルをそのまま静的アセットとして配信する。React等のフレームワーク、Tailwind CSS等のCSSフレームワーク、Vite、TypeScript、ルーティングライブラリは導入しない。
 
-React移行を容易にするため、以下を守る。
+CSSは次の方針で書く。
+
+* 色・フォントなどはCSSカスタムプロパティ（`:root` の変数）にまとめ、各所で直接値を書かない。
+* 全ページ共通のスタイルは `styles/common.css` に置き、ページや表現ごとの差分だけを別ファイルに分ける。
+* インラインスタイル（`style` 属性）は使わない。Content Security Policyで `style-src 'self'` に限定するため。
+
+フレームワークなしでもコードが散らからないよう、以下を守る。
 
 * `main.js` は起動と画面初期化だけを担い、API通信・状態・表示を分ける。
 * `api/` にはfetch処理だけ、`views/` には対応する画面領域の描画だけ、`lib/` には日時整形や匿名IDなど再利用処理だけを置く。
 * `onclick` 属性、グローバル関数、画面の各所からの無秩序なDOM操作を避ける。
 * DOMを状態の正本にせず、取得した値はJavaScriptの状態として保持してから描画する。
 * APIから受け取った文字列を `innerHTML` へ直接入れず、原則として `textContent` を使う。
-* 匿名IDのlocalStorageキーは `sleepless-anonymous-id` とし、React版でも同じキーを使う。
+* 匿名IDのlocalStorageキーは `sleepless-anonymous-id` とする。
 
-## 10.3 React版の位置付けと移行先
+## 10.3 配信先
 
-`apps/web-react` はPhase 6のリリースを止めずにReactを学び、同じ機能を再実装・検証する場所とする。Vanilla版の責務は、React版では次のように対応させる。
-
-| Vanilla JavaScript版 | React版 |
-| --- | --- |
-| `views/counts.js` | `components/CountsPanel.jsx` |
-| `views/presence.js` | `components/PresencePanel.jsx` |
-| `api/counts.js` | `api/counts.js`（原則そのまま） |
-| `api/presence.js` | `api/presence.js`（原則そのまま） |
-| 状態管理用のJSモジュール | `hooks/useCounts.js`、`hooks/usePresence.js` |
-| `main.js` | `main.jsx` と `App.jsx` |
-
-React版でもTailwind CSS、API URL、匿名IDキー、表示する文言と鮮度判定をVanilla版と揃える。これにより、移行時にバックエンドとデータを変更しない。
-
-## 10.4 配信先と移行手順
-
-ドメイン名は説明用の例であり、実際には取得・設定したドメインまたはCloudflareの `workers.dev` URLへ置き換える。
+`apps/web` をCloudflare Workersの静的配信で本番ドメインへ配信する。手順は [Cloudflare配信ガイド](WEB_CLOUDFLARE_DEPLOY_GUIDE.md) を参照する。
 
 ```text
-通常時
+本番
   sleepless.example.com
-  → web-vanilla-js を本番デプロイ
+  → main へのマージで apps/web を自動デプロイ
 
-React版の確認時
-  react-preview.sleepless.example.com
-  → web-react をプレビューデプロイ
-
-移行時
-  sleepless.example.com
-  → web-react のビルド成果物を本番デプロイ
+検証
+  <ブランチ名>-sleepless-web.<サブドメイン>.workers.dev
+  → 作業ブランチへのpushで Preview を自動作成
 ```
 
-本番URLにはVanilla版とReact版を同時に配信しない。React版をプレビューURLで実機確認し、Counts・Presence・匿名ID引継ぎ・鮮度表示・PWA導線を確認してから本番デプロイを切り替える。切替後に問題があれば、直前のVanilla版のデプロイを同じ本番URLへ再デプロイしてロールバックする。
+ドメイン名は説明用の例であり、実際には取得・設定したドメインへ置き換える。
 
-Cloudflareでは、本番・プレビューともに `/api/*` をAPI Worker、その他のパスを各フロントエンドの静的アセットへルーティングする。ReactプレビューはAPI Workerのステージング環境とステージングD1へ接続し、本番のPresenceや集計データをテストで書き換えない。
+Cloudflareでは、本番・Previewともに `/api/*` をAPI Worker、その他のパスを `apps/web` の静的アセットへルーティングする。PreviewはAPI Workerのステージング環境とステージングD1へ接続し、本番のPresenceや集計データをテストで書き換えない。
 
-同じ本番URLでPWAを提供する場合、Service WorkerとWeb App Manifestは本番中の片方だけが登録・配信する。React版のService WorkerをまずプレビューURLで確認し、切替時はキャッシュ名を変えて古いアセットが残らないことを確認する。
+PWAのService Workerを更新するときは、まずPreviewで確認し、キャッシュ名を変えて古いアセットが残らないことを確認する。
 
 ---
 
-## 10.5 最初の画面
+## 10.4 最初の画面
 
 MVPでは原則1画面だけ作る。
 
@@ -961,11 +937,11 @@ MVPでは原則1画面だけ作る。
 
 ページ遷移は不要。
 
-画面遷移やフレームワークはこの時点では不要。
+画面遷移の仕組みやフレームワークは使わない。
 
 ---
 
-## 10.6 件数取得API
+## 10.5 件数取得API
 
 Botが取得している件数をWebでも利用できるようにする。
 
@@ -1001,13 +977,13 @@ D1
 
 ---
 
-## 10.7 データの鮮度
+## 10.6 データの鮮度
 
 APIは最新の成功したスナップショットだけを返す。ただし、現在時刻と `window_end_at` の差が2時間を超える場合は「最新データを取得できていません」と扱い、通常の「この1時間」表示をしない。レスポンスには検索対象の開始・終了時刻と取得時刻を含め、画面には「対象: 01:00–02:00 JST」「更新: 02:01 JST」のように表示する。
 
 ---
 
-## 10.8 API例
+## 10.7 API例
 
 ```text
 GET /api/counts/latest
@@ -1555,11 +1531,10 @@ PCを閉じていても毎晩Botが動く。
 
 ## Milestone 5
 
-### HTML / Tailwind CSS / JavaScript Web MVP
+### HTML / CSS / JavaScript Web MVP
 
-* [ ] `apps/web-vanilla-js` を作成
-* [ ] HTML + Tailwind CSS + 素のJavaScriptで画面を作成
-* [ ] Tailwind CSSの本番ビルドを追加
+* [ ] `apps/web` を作成
+* [ ] HTML + 素のCSS + 素のJavaScriptで画面を作成
 * [ ] Cloudflareへデプロイ
 * [ ] `apps/api` Workerを作成し、D1 bindingを追加
 * [ ] Botから件数保存
@@ -1643,22 +1618,6 @@ Xを開かず、ホーム画面から直接アクセスできる。
 
 ---
 
-## Milestone R（任意）
-
-### React版への移行
-
-* [ ] `apps/web-react` にVanilla版と同じ機能を実装
-* [ ] API URL・レスポンス形式・匿名IDキーの互換性を確認
-* [ ] プレビューURLでCounts・Presence・鮮度表示・PWA導線を実機確認
-* [ ] 本番URLをReact版へ切替
-* [ ] Vanilla版へのロールバックを確認
-
-### ゴール
-
-本番ユーザーのデータや利用体験を壊さず、React版を本番URLで提供できる。
-
----
-
 # 20. テスト・監視・リリース基準
 
 ## 20.1 テスト
@@ -1712,10 +1671,10 @@ Cloudflare Cron ──▶┌────────────┐────�
                  │  API Worker   │
                  └───────┬───────┘
                          │
-                 ┌───────┴───────────────┐
-                 │ Web frontend (one only)│
-                 │ Vanilla JS or React    │
-                 └───────┬───────────────┘
+                 ┌───────┴───────┐
+                 │   apps/web    │
+                 │ （素のJS）    │
+                 └───────┬───────┘
                          │
                          ▼
                         PWA
