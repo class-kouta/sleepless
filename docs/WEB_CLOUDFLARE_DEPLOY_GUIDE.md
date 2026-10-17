@@ -27,7 +27,7 @@
 ```text
 1. 事前準備（Cloudflareアカウントの2段階認証、wranglerの確認）
         ↓
-2. 配信用ディレクトリ apps/web-vanilla-js を作成し、試作ページを public/ にコピー
+2. 配信用ディレクトリ apps/web を作成し、試作ページを public/ にコピー
         ↓
 3. ローカルで表示確認（wrangler dev）
         ↓
@@ -90,6 +90,7 @@ main へpush ─────────▶ 本番へ自動デプロイ
 * Botで使っているCloudflareアカウントをそのまま使う（`sleepless-bot.workers.dev` のサブドメインを持つアカウント）。
 * ドメインと課金情報を扱うため、Cloudflareアカウントの2段階認証を有効にしておく。
 * `wrangler` は **4.136.3以上** を使う。Previewを作る `wrangler preview` コマンドは4.135.0以上が必要で、Cloudflareの資料では4.136.3以上が推奨されている。`apps/bot` の `4.70.0` は対応していないため、Web側だけ新しいバージョンを固定する（Botの更新は別途判断する）。
+* wrangler 4.136.3以上は **Node.js 22以上** が必要。[Phase 2ガイド](PHASE_2_CLOUDFLARE_WORKER_GUIDE.md)の時点ではローカルがNode.js 20.10.0だったため、`apps/web` の作業前にNode.js 22へ更新する。`apps/web/.node-version` に `22` と書いておくと、Workers Buildsのビルドも同じメジャーバージョンで実行される。
 * 手元の `wrangler` がCloudflareにログイン済みか確認する。
 
 ```sh
@@ -99,10 +100,10 @@ npx wrangler whoami
 
 ### 4.2 ディレクトリ構成
 
-実装計画（Phase 6）の配置に合わせ、配信用に `apps/web-vanilla-js` を作り、試作ページを `public/` にコピーする。`prototypes/night-sky/` は試作の記録として残す。
+実装計画（Phase 6）の配置に合わせ、配信用に `apps/web` を作り、試作ページを `public/` にコピーする。`prototypes/night-sky/` は試作の記録として残す。
 
 ```text
-apps/web-vanilla-js/
+apps/web/
 ├── public/                 # このディレクトリの中身だけが公開される
 │   ├── index.html
 │   ├── privacy.html
@@ -112,14 +113,15 @@ apps/web-vanilla-js/
 │   └── styles/
 │       ├── common.css
 │       └── photo.css
+├── .node-version           # 22（Workers Buildsで使うNode.jsのバージョン）
 ├── package.json
 ├── package-lock.json       # 自動デプロイ時の依存インストールに使うため、必ずコミットする
 └── wrangler.jsonc
 ```
 
 ```sh
-mkdir -p apps/web-vanilla-js/public
-cp -R prototypes/night-sky/. apps/web-vanilla-js/public/
+mkdir -p apps/web/public
+cp -R prototypes/night-sky/. apps/web/public/
 ```
 
 `wrangler.jsonc` や `package.json` を `public/` に入れないこと。`assets.directory` 配下はすべて公開される。
@@ -155,7 +157,7 @@ cp -R prototypes/night-sky/. apps/web-vanilla-js/public/
 
 ```json
 {
-  "name": "@sleepless/web-vanilla-js",
+  "name": "@sleepless/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -170,7 +172,7 @@ cp -R prototypes/night-sky/. apps/web-vanilla-js/public/
 ```
 
 ```sh
-cd apps/web-vanilla-js
+cd apps/web
 npm install
 ```
 
@@ -195,7 +197,7 @@ JavaScriptやAPI呼び出しを追加するとき（Phase 6）は、`script-src 
 ### 4.6 ローカル確認
 
 ```sh
-cd apps/web-vanilla-js
+cd apps/web
 npm run dev
 ```
 
@@ -223,7 +225,7 @@ npm run dev
 初回だけ手元からデプロイしてWorker `sleepless-web` を作成する。以後の手動デプロイは行わない。
 
 ```sh
-cd apps/web-vanilla-js
+cd apps/web
 npm run deploy
 ```
 
@@ -245,7 +247,7 @@ npm run deploy
 | `main` | `npx wrangler deploy` | 本番へデプロイ |
 | `main` 以外 | `npx wrangler preview` | そのブランチ専用のPreviewを作成・更新し、PRにURLをコメント |
 
-`apps/web-vanilla-js/` 以外（Botやドキュメント）だけを変更したpushではビルドしない（[7.2](#72-ビルドの設定)のビルド監視パス）。
+`apps/web/` 以外（Botやドキュメント）だけを変更したpushではビルドしない（[7.2](#72-ビルドの設定)のビルド監視パス）。
 
 ### 7.1 リポジトリの接続
 
@@ -260,12 +262,12 @@ npm run deploy
 | 項目 | 値 |
 | --- | --- |
 | Git ブランチ（本番ブランチ） | `main` |
-| ルートディレクトリ | `apps/web-vanilla-js` |
+| ルートディレクトリ | `apps/web` |
 | ビルドコマンド | 空欄（ビルド工程がない。依存は `package-lock.json` から自動でインストールされる） |
 | デプロイコマンド | `npx wrangler deploy` |
 | Preview Buildsを有効にする（ブランチ制御） | オン |
 | Previewコマンド | `npx wrangler preview`（既定値のまま） |
-| ビルド監視パス（含める） | `apps/web-vanilla-js/*` |
+| ビルド監視パス（含める） | `apps/web/*` |
 | ビルド監視パス（除外する） | 空欄 |
 
 既存のWorkerにあとからリポジトリを接続した場合、ビルド設定に **Worker Previewsのセットアップ** の案内が出ることがある。その場合は案内に従って **Worker Previewsに切り替える** を選ぶ（Previewコマンドが `npx wrangler preview` になる）。
@@ -368,7 +370,7 @@ Cloudflareダッシュボードの対象ドメインで設定する。
 本番で問題が出た場合は、まず直前のバージョンへ戻して被害を止め、その後に修正する。
 
 ```sh
-cd apps/web-vanilla-js
+cd apps/web
 npx wrangler deployments list  # デプロイ履歴
 npx wrangler rollback          # 直前のバージョンへ戻す
 ```
