@@ -63,8 +63,12 @@ body {
   white-space: pre-line;
 }
 
+.count-label {
+  line-height: 1.9;
+}
+
 .count {
-  margin: 0.5rem 0;
+  margin: 0.65rem 0 0.5rem;
   color: var(--color-accent);
   font-size: clamp(2.75rem, 12vw, 3.75rem);
   font-weight: 600;
