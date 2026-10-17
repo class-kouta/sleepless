@@ -5,8 +5,8 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY_MS = 250;
 
-export const SLEEPLESS_QUERY = '("眠れない" OR "ねむれない" OR "眠れぬ" OR "ねむれぬ" OR "眠れん" OR "ねむれん" OR "寝れない" OR "ねれない" OR "寝れぬ" OR "ねれぬ" OR "寝れん" OR "ねれん") lang:ja -is:retweet';
-export const SLEEPLESS_QUERY_VERSION = "2";
+export const SLEEPLESS_QUERY = '("眠れない" OR "ねむれない" OR "眠れぬ" OR "ねむれぬ" OR "眠れん" OR "ねむれん" OR "寝れない" OR "ねれない" OR "寝れぬ" OR "ねれぬ" OR "寝れん" OR "ねれん" OR "寝れね" OR "ねれね" OR "寝られない" OR "ねられない" OR "寝られぬ" OR "ねられぬ" OR "寝られん" OR "ねられん") lang:ja -is:retweet';
+export const SLEEPLESS_QUERY_VERSION = "3";
 
 type CountsEnv = {
   X_BEARER_TOKEN: string;
