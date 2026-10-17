@@ -57,7 +57,7 @@
 1. X Botを最小構成で動かす
 2. Botを自動化する
 3. X上の「眠れない」投稿数をBotに表示する
-4. HTML・Tailwind CSS・素のJavaScriptでWebアプリを作る
+4. HTML・素のCSS・素のJavaScriptでWebアプリを作る
 5. Webアプリ独自の「今ここにいる人」機能を追加する
 6. PWA化する
 7. 利用状況を見ながら機能・収益化を検討する
@@ -126,7 +126,7 @@ sleepless/
 ## 3.3 Webアプリ
 
 * HTML
-* Tailwind CSS
+* CSS（フレームワークなし）
 * JavaScript（フレームワークなし）
 * Cloudflare
 * Cloudflare Workers
@@ -853,16 +853,21 @@ sleepless/
 │   │   └── src/
 │   │       ├── counts.js
 │   │       └── presence.js
-│   └── web/                         # Webフロントエンド（素のJavaScript）
-│       ├── index.html
+│   └── web/                         # Webフロントエンド（素のHTML・CSS・JavaScript）
+│       ├── public/                  # ビルドせず、この中身をそのまま配信する
+│       │   ├── index.html
+│       │   ├── privacy.html
+│       │   ├── _headers
+│       │   ├── images/
+│       │   ├── styles/
+│       │   │   └── common.css
+│       │   └── scripts/
+│       │       ├── main.js
+│       │       ├── api/
+│       │       ├── views/
+│       │       └── lib/
 │       ├── package.json
-│       ├── tailwind.config.js
-│       └── src/
-│           ├── main.js
-│           ├── api/
-│           ├── views/
-│           ├── lib/
-│           └── styles/input.css
+│       └── wrangler.jsonc
 │
 └── docs/
 ```
@@ -871,7 +876,13 @@ sleepless/
 
 ## 10.2 フロントエンドの実装方針
 
-技術はHTML、Tailwind CSS、素のJavaScriptとする。Tailwind CSSはCLIでビルドし、生成したCSSを静的アセットとして配信する。React等のフレームワーク、Vite、TypeScript、ルーティングライブラリは導入しない。
+技術はHTML、素のCSS、素のJavaScriptとする。ビルド工程は設けず、`public/` のファイルをそのまま静的アセットとして配信する。React等のフレームワーク、Tailwind CSS等のCSSフレームワーク、Vite、TypeScript、ルーティングライブラリは導入しない。
+
+CSSは次の方針で書く。
+
+* 色・フォントなどはCSSカスタムプロパティ（`:root` の変数）にまとめ、各所で直接値を書かない。
+* 全ページ共通のスタイルは `styles/common.css` に置き、ページや表現ごとの差分だけを別ファイルに分ける。
+* インラインスタイル（`style` 属性）は使わない。Content Security Policyで `style-src 'self'` に限定するため。
 
 フレームワークなしでもコードが散らからないよう、以下を守る。
 
@@ -1520,11 +1531,10 @@ PCを閉じていても毎晩Botが動く。
 
 ## Milestone 5
 
-### HTML / Tailwind CSS / JavaScript Web MVP
+### HTML / CSS / JavaScript Web MVP
 
 * [ ] `apps/web` を作成
-* [ ] HTML + Tailwind CSS + 素のJavaScriptで画面を作成
-* [ ] Tailwind CSSの本番ビルドを追加
+* [ ] HTML + 素のCSS + 素のJavaScriptで画面を作成
 * [ ] Cloudflareへデプロイ
 * [ ] `apps/api` Workerを作成し、D1 bindingを追加
 * [ ] Botから件数保存
