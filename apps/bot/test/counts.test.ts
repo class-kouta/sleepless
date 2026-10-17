@@ -5,8 +5,8 @@ import { recentSleeplessPostCount, SLEEPLESS_QUERY, SLEEPLESS_QUERY_VERSION } fr
 
 test("combines all sleepless expressions into one Japanese post-count query", () => {
   assert.equal(SLEEPLESS_QUERY,
-    '("眠れない" OR "ねむれない" OR "眠れぬ" OR "ねむれぬ" OR "眠れん" OR "ねむれん" OR "寝れない" OR "ねれない" OR "寝れぬ" OR "ねれぬ" OR "寝れん" OR "ねれん") lang:ja -is:retweet');
-  assert.equal(SLEEPLESS_QUERY_VERSION, "2");
+    '("眠れない" OR "ねむれない" OR "眠れぬ" OR "ねむれぬ" OR "眠れん" OR "ねむれん" OR "寝れない" OR "ねれない" OR "寝れぬ" OR "ねれぬ" OR "寝れん" OR "ねれん" OR "寝れね" OR "ねれね" OR "寝られない" OR "ねられない" OR "寝られぬ" OR "ねられぬ" OR "寝られん" OR "ねられん") lang:ja -is:retweet');
+  assert.equal(SLEEPLESS_QUERY_VERSION, "3");
 });
 
 function mockFetch(t: TestContext, implementation: typeof fetch) {

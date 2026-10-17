@@ -30,7 +30,7 @@ function hourLabel(timestamp: string): string {
 }
 
 export function buildSleeplessMessage(windowEndAt: string, postCount: number): string {
-  return `${formatJstDateTime(windowEndAt)}\n\n直近1時間に、\n\n「眠れない」「ねむれない」\n「眠れぬ」「ねむれぬ」\n「眠れん」「ねむれん」\n「寝れない」「ねれない」\n「寝れぬ」「ねれぬ」\n「寝れん」「ねれん」\n\nという投稿が、合わせて\n\n${postCount.toLocaleString("ja-JP")}件\n\nありました。\n\n今この瞬間、眠れずにいるのはあなただけではないようです。`;
+  return `${formatJstDateTime(windowEndAt)}\n\n直近1時間に、\n\n「眠れない」「ねむれない」\n「眠れぬ」「ねむれぬ」\n「眠れん」「ねむれん」\n「寝れない」「ねれない」\n「寝れぬ」「ねれぬ」\n「寝れん」「ねれん」\n「寝れね」「ねれね」\n「寝られない」「ねられない」\n「寝られぬ」「ねられぬ」\n「寝られん」「ねられん」\n\nという投稿が、合わせて\n\n${postCount.toLocaleString("ja-JP")}件\n\nありました。\n\n今この瞬間、眠れずにいるのはあなただけではないようです。`;
 }
 
 export function buildDailySleeplessMessage(

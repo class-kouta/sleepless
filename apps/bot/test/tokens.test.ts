@@ -363,8 +363,8 @@ async function seedNightlyCounts(startAt = "2026-09-25T13:00:00.000Z"): Promise<
       `INSERT INTO sleepless_counts (
         window_end_at, window_start_at, query_version, query_text, post_count, fetched_at, x_post_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(end, start, "2",
-      '("眠れない" OR "ねむれない" OR "眠れぬ" OR "ねむれぬ" OR "眠れん" OR "ねむれん" OR "寝れない" OR "ねれない" OR "寝れぬ" OR "ねれぬ" OR "寝れん" OR "ねれん") lang:ja -is:retweet',
+    ).bind(end, start, "3",
+      '("眠れない" OR "ねむれない" OR "眠れぬ" OR "ねむれぬ" OR "眠れん" OR "ねむれん" OR "寝れない" OR "ねれない" OR "寝れぬ" OR "ねれぬ" OR "寝れん" OR "ねれん" OR "寝れね" OR "ねれね" OR "寝られない" OR "ねられない" OR "寝られぬ" OR "ねられぬ" OR "寝られん" OR "ねられん") lang:ja -is:retweet',
       index + 1, end, `hourly-${index}`).run();
   }
 }
