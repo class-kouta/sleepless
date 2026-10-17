@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sleepless-web",
+  "compatibility_date": "2026-10-15",
+  "assets": {
+    "directory": "./public"
+  },
+  "workers_dev": true,
+  "preview_urls": true,
+  "previews": {}
+}

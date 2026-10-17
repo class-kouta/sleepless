@@ -1,0 +1,13 @@
+{
+  "name": "@sleepless/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler preview"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.1"
+  }
+}
