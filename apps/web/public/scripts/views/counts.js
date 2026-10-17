@@ -1,4 +1,4 @@
-import { formatPeriod, formatUpdatedAt } from "../lib/date-time.js";
+import { formatPeriod } from "../lib/date-time.js";
 import { companionMessage, fallbackMessage } from "../lib/display-copy.js";
 
 const elements = {
@@ -21,7 +21,7 @@ export function renderCount(data) {
   elements.suffix.hidden = false;
   elements.message.textContent = companionMessage(data.kind);
   elements.status.textContent = fallbackMessage(data.isFallback);
-  elements.meta.textContent = `対象: ${formatPeriod(data.windowStartAt, data.windowEndAt, daily || data.isFallback)} ／ 更新: ${formatUpdatedAt(data.fetchedAt)}`;
+  elements.meta.textContent = `対象: ${formatPeriod(data.windowStartAt, data.windowEndAt, daily || data.isFallback)}`;
 }
 
 export function renderCountError() {

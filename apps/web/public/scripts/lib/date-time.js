@@ -28,8 +28,3 @@ export function formatPeriod(startAt, endAt, includeDate) {
   if (!includeDate) return `${startTime}–${endTime} JST`;
   return `${start.month}/${start.day} ${startTime}–${end.month}/${end.day} ${endTime} JST`;
 }
-
-export function formatUpdatedAt(timestamp) {
-  const value = parts(timestamp);
-  return `${value.hour}:${value.minute} JST`;
-}
