@@ -947,6 +947,8 @@ Botが取得している件数をWebでも利用できるようにする。
 
 件数保存用のD1はPhase 3で導入済みとする。`apps/bot` はCron専用Worker、`apps/api` はAPI専用Workerとし、両者に同一の本番D1を明示的にbindする。フロントエンドは本番URLと同一オリジンの `/api/` を利用する構成を優先し、不要なCORS公開はしない。
 
+公開後のD1負荷と濫用対策として、成功レスポンスだけを短時間キャッシュし、不要なクエリ文字列を拒否し、Cloudflare WAFでパス単位のレート制限を行う。エラー応答はキャッシュしない。具体的な実装・設定・検証・ロールバック手順は[Counts API キャッシュ・レート制限ガイド](API_CACHE_RATE_LIMITING_GUIDE.md)を参照する。
+
 BotのCron実行時、
 
 ```text
