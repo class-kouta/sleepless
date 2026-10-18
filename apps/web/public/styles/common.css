@@ -161,6 +161,27 @@ a {
   max-width: 30rem;
 }
 
+.footer .footer-purpose {
+  margin-bottom: 0.5rem;
+  color: var(--color-text);
+  font-size: 0.8rem;
+}
+
+.footer-notes {
+  display: grid;
+  gap: 0.5rem;
+  width: min(100%, 30rem);
+  margin: 0;
+  padding-left: 1.25em;
+  list-style-type: "※";
+  text-align: left;
+}
+
+.footer-terms {
+  display: block;
+  margin-top: 0.25rem;
+}
+
 .x-link {
   display: grid;
   place-items: center;
