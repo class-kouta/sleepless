@@ -167,6 +167,11 @@ a {
   font-size: 0.8rem;
 }
 
+.footer .footer-x-note {
+  color: var(--color-text);
+  font-size: 0.8rem;
+}
+
 .footer-notes {
   display: grid;
   gap: 0.5rem;
