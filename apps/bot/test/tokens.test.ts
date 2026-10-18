@@ -20,7 +20,12 @@ const access = "test-access-never-log";
 
 before(async () => {
   db = await mf.getD1Database("DB") as unknown as D1Database;
-  for (const name of ["0001_create_bot_runs.sql", "0002_create_sleepless_counts.sql", "0003_create_oauth_token_state.sql"]) {
+  for (const name of [
+    "0001_create_bot_runs.sql",
+    "0002_create_sleepless_counts.sql",
+    "0003_create_oauth_token_state.sql",
+    "0004_index_sleepless_counts_window_start_at.sql",
+  ]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     await db.batch(sql.split(";").filter((part) => part.trim()).map((part) => db.prepare(part)));
   }
@@ -38,6 +43,13 @@ beforeEach(async () => {
 async function state(): Promise<TokenState> {
   return (await db.prepare("SELECT * FROM oauth_token_state WHERE id = 1").first<TokenState>())!;
 }
+
+test("daily count snapshots have an index on window_start_at", async () => {
+  const index = await db.prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
+  ).bind("idx_sleepless_counts_window_start_at").first<{ name: string }>();
+  assert.equal(index?.name, "idx_sleepless_counts_window_start_at");
+});
 
 async function seed(warm = false): Promise<void> {
   await db.prepare(await initializeSql(env, oldRefresh)).run();

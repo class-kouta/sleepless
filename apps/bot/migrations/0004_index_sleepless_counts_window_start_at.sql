@@ -1,0 +1,2 @@
+CREATE INDEX idx_sleepless_counts_window_start_at
+ON sleepless_counts(window_start_at);
