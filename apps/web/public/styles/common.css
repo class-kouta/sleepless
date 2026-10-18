@@ -173,6 +173,7 @@ a {
   width: min(100%, 30rem);
   margin: 0;
   padding-left: 1.25em;
+  list-style-type: "※";
   text-align: left;
 }
 
