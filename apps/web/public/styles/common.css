@@ -161,6 +161,16 @@ a {
   max-width: 30rem;
 }
 
+.footer .footer-purpose {
+  margin-bottom: 0.5rem;
+  color: var(--color-text);
+  font-size: 0.8rem;
+}
+
+.footer .footer-terms {
+  margin-top: -0.5rem;
+}
+
 .x-link {
   display: grid;
   place-items: center;
