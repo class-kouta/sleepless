@@ -92,7 +92,7 @@ npx wrangler login
 
 Wranglerは、ローカルのコードをCloudflareへデプロイするCLIである。ブラウザが開き、Cloudflareアカウントで認可すると、ローカルのWranglerがそのアカウントへデプロイできるようになる。
 
-重要: リポジトリ直下で `npx wrangler login` を実行すると、プロジェクトに固定したWranglerではなく最新版を一時取得しようとする場合がある。今回のNode.js 20.10.0では最新版（4.129.0）がNode.js 22以上を必要とし失敗した。必ず `apps/bot` で実行し、プロジェクトに入っているWrangler 4.70.0を使う。
+重要: リポジトリ直下で `npx wrangler login` を実行すると、プロジェクトに固定したWranglerではなく最新版を一時取得しようとする場合がある。必ず `apps/bot` で実行し、`apps/bot/package.json` に固定したWranglerを使う。現在のWranglerはNode.js 22以上を必要とするため、`apps/bot/.node-version` も `22` に固定している。
 
 ### 3. XのアクセストークンをCloudflare Secretへ登録
 

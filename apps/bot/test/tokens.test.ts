@@ -1,17 +1,17 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test, type TestContext } from "node:test";
 import { readFile } from "node:fs/promises";
-import { Miniflare } from "miniflare";
+import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { decryptToken, encryptToken } from "../src/token-crypto.js";
 import { initializeSql, recoverSql, rekeySql } from "../src/token-admin-sql.js";
 import { assertTokenCurrent, getAccessToken, reportTokenFailure, TokenError, type TokenEnv, type TokenState } from "../src/tokens.js";
 import { createManagedPost } from "../src/token-post.js";
 import worker from "../src/index.js";
 
-const mf = new Miniflare({
+const mf = new Miniflare(convertV4MiniflareOptions({
   modules: true, compatibilityDate: "2026-03-01", d1Databases: ["DB"],
   script: "export default { fetch() { return new Response('test'); } }",
-});
+}));
 let db: D1Database;
 let env: TokenEnv;
 const oldRefresh = "test-refresh-old-never-log";
