@@ -25,6 +25,7 @@
 
 - [x] 本番・ステージングへ `X_BEARER_TOKEN` をCloudflare Secretとして登録する
 - [x] `sleepless_counts` migrationを本番・ステージングへ適用する
+- [x] `window_start_at` インデックスmigrationを本番・ステージングへ適用する
 - [x] 両Workerをデプロイし、Counts取得と動的投稿を確認する
 - [ ] 夜間に失効する投稿用Access Tokenを、Phase 5で自動更新する
 
@@ -650,7 +651,12 @@ CREATE TABLE sleepless_counts (
   fetched_at TEXT NOT NULL,
   x_post_id TEXT
 );
+
+CREATE INDEX idx_sleepless_counts_window_start_at
+ON sleepless_counts(window_start_at);
 ```
+
+`window_end_at` は主キーのインデックス、`window_start_at` は追加インデックスを利用する。日次集計とWeb表示の取得条件は変えず、直近の対象行を効率的に読み取れるようにする。
 
 検索語を変えた場合は `query_version` を上げ、過去値と単純比較しない。件数は投稿数であり、ユニークユーザー数・実際に眠れない人の人数・医学的な指標ではない。
 
