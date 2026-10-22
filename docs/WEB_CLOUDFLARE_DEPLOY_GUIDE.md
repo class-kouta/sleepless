@@ -341,10 +341,11 @@ Cloudflareダッシュボードの対象ドメインで設定する。
 | `www` → ルートへ転送 | ルール → **リダイレクトルール** → テンプレート「WWWからルートへリダイレクト」 | 301。`www` にプロキシ有効（オレンジ雲）のDNSレコードが必要なので、なければ `AAAA www 100::` を作成する |
 | HSTS | SSL/TLS → 証明書 → HSTS | 公開後しばらく安定してから有効化（最初は `max-age` を短く） |
 
-プライバシーポリシーには「Cookieや、閲覧状況を計測するツールも使用していません」と書いている。次の機能を有効にする場合は、先にポリシーを更新すること。
+プライバシーポリシーには「Cookieも使用していません」と書いている。次の機能を有効にする場合は、先にポリシーを更新すること。
 
-* **Web Analytics**（Cookieは使わないが計測ツールに当たる）
 * **Bot Fight Mode / Turnstile** など（`__cf_bm` などのCookieを付与することがある）
+
+**Web Analytics** は自動セットアップで有効化済みで、ポリシーの「アクセス状況の計測」に記載している。Cloudflareが差し込む計測スクリプトは `_headers` のCSPで許可しないと読み込まれないため、`script-src` に `https://static.cloudflareinsights.com`、`connect-src` に `https://cloudflareinsights.com` を追加している。
 
 ---
 
