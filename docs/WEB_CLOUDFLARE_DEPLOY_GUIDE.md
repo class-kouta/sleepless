@@ -90,7 +90,7 @@ main へpush ─────────▶ 本番へ自動デプロイ
 * Botで使っているCloudflareアカウントをそのまま使う（`sleepless-bot.workers.dev` のサブドメインを持つアカウント）。
 * ドメインと課金情報を扱うため、Cloudflareアカウントの2段階認証を有効にしておく。
 * `wrangler` は **4.136.3以上** を使う。Previewを作る `wrangler preview` コマンドは4.135.0以上が必要で、Cloudflareの資料では4.136.3以上が推奨されている。Bot、API、Webはいずれもこの条件を満たすバージョンへ更新済みである。
-* wrangler 4.136.3以上は **Node.js 22以上** が必要。[Phase 2ガイド](PHASE_2_CLOUDFLARE_WORKER_GUIDE.md)の時点ではローカルがNode.js 20.10.0だったため、その後Node.js 22以上へ更新した。各アプリの `.node-version` に `22` と書き、Workers Buildsのビルドでも同じメジャーバージョンを使用する。
+* wrangler 4.136.3以上は **Node.js 22以上** が必要。[Phase 2ガイド](PHASE_2_CLOUDFLARE_WORKER_GUIDE.md)の時点ではローカルがNode.js 20.10.0だったため、その後Node.js 22以上へ更新した。2026年10月のNode.jsセキュリティリリースを取り込むため、各アプリの `.node-version` は修正版の `22.23.4` に固定し、Workers Buildsでも同じバージョンを使用する。
 * 手元の `wrangler` がCloudflareにログイン済みか確認する。
 
 ```sh
@@ -113,7 +113,7 @@ apps/web/
 │   └── styles/
 │       ├── common.css
 │       └── photo.css
-├── .node-version           # 22（Workers Buildsで使うNode.jsのバージョン）
+├── .node-version           # 22.23.4（Workers Buildsで使うNode.jsのバージョン）
 ├── package.json
 ├── package-lock.json       # 自動デプロイ時の依存インストールに使うため、必ずコミットする
 └── wrangler.jsonc
