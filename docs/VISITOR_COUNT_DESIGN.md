@@ -1,247 +1,299 @@
-# 直近24時間の訪問人数表示 設計書
+# Cloudflare訪問数表示 設計書
 
 最終更新: 2026-10-24
 
 ## 1. 目的
 
-Web版に、直近24時間に訪れた人数を表示する。
+Cloudflareが集計する直近24時間の訪問数を定期的に取得し、Web版に表示する。
 
 ```text
 この24時間に
 42人が訪れました
 ```
 
-単純なHTTPリクエスト数やページビュー数ではなく、同じ利用者による再読み込みを重複加算しない指標にする。Cloudflare Analytics APIは使用せず、既存のAPI WorkerとD1を利用して集計する。
+ブラウザからCloudflare Analytics APIを直接呼ばず、Cronで取得した結果をD1へ保存する。既存の `GET /api/counts/latest` に訪問数を追加し、ページ表示時のAPIリクエスト数を増やさない。
 
-## 2. 指標の定義
-
-表示する値を、次のように定義する。
-
-> 現在時刻から過去24時間以内に、本サイトがブラウザへ生成した匿名IDを使って訪問を通知した、異なるIDの数
-
-同じ匿名IDはD1で1行だけ保持する。ページを再読み込みしても行数は増えず、直近24時間の人数も増えない。
-
-ただし、この値は厳密な実人数ではない。
-
-* 同じ人が複数の端末やブラウザを使うと、複数人として数える。
-* ブラウザの保存データを削除した場合やプライベートブラウズでは、新しい匿名IDになることがある。
-* 端末やブラウザを複数人で共有している場合は、1人として数えることがある。
-* JavaScriptまたはブラウザ内の保存領域を無効にしている訪問は数えない。
-
-画面上はUXを優先して単位を「人」とする。個人を識別できると誤認させる説明や、「正確な利用者数」などの表現は使用しない。集計方法と限界はプライバシーポリシーに記載する。
-
-## 3. 要件
-
-### 3.1 機能要件
-
-* 直近24時間の匿名ID数を表示する。
-* 同じ匿名IDによる再読み込みでは人数を増やさない。
-* 24時間以内に再訪した場合は同じ1人として扱い、最終訪問時刻を更新する。
-* 最終訪問から24時間を超えたIDは表示対象外にする。
-* X投稿件数の表示に失敗を波及させない。
-* 訪問登録に失敗しても、ページ本体とX投稿件数は表示する。
-* 集計値が取得できない場合は、古い値を人数として断定せず、訪問人数の領域だけを非表示または取得失敗表示にする。
-
-### 3.2 非機能要件
-
-* 氏名、メールアドレス、Xアカウント、IPアドレス、User-AgentをD1へ保存しない。
-* ブラウザで生成した匿名IDの生値をD1へ保存しない。
-* 匿名IDをログへ出力しない。
-* 不要なCORS公開を行わず、同一オリジンからだけ利用する。
-* D1への重複書き込みと読み取り行数を抑える。
-* APIの濫用による人数の水増しとWorker/D1負荷を抑える。
-* 本番とPreviewでD1を分離する。
-
-## 4. 対象外
-
-初期実装では、次を行わない。
-
-* ログインによる人単位の識別
-* 端末をまたいだ重複排除
-* IPアドレス、User-Agent、Canvasなどを組み合わせるブラウザフィンガープリント
-* Cloudflare Analytics APIとの数値照合
-* 国、参照元、端末などの属性別集計
-* 過去の人数推移グラフ
-* 厳密なリアルタイム表示
-
-## 5. システム構成
+## 2. 採用する構成
 
 ```text
+Cloudflare Cron（10分間隔）
+  ↓
+sleepless-api Worker
+  ↓
+Cloudflare GraphQL Analytics API
+  ↓ 直近24時間のvisits
+D1へ最新値をUPSERT
+
 ブラウザ
-  ├─ localStorageから匿名IDを取得
-  │    └─ 未作成ならcrypto.randomUUID()で生成
-  ├─ POST /api/visits
-  │    ↓
-  │  sleepless-web Worker
-  │    ↓ Service Binding
-  │  sleepless-api Worker
-  │    ↓ SHA-256
-  │  D1へupsert
-  │
-  └─ GET /api/counts/latest
-       ↓
-     sleepless-web Worker
-       ↓ Service Binding
-     sleepless-api Worker
-       ├─ X投稿件数をD1から取得
-       └─ 直近24時間の匿名ID数をD1から取得
+  ↓ 既存の1リクエスト
+GET /api/counts/latest
+  ↓
+sleepless-api Worker
+  ├─ X投稿件数をD1から取得
+  └─ 訪問数の最新値をD1から取得
+  ↓
+X投稿件数と訪問数をまとめて返す
 ```
 
-既存の `GET /api/counts/latest` に訪問人数を追加し、人数取得専用のGETリクエストは増やさない。訪問登録用のPOSTだけが新しいリクエストになる。
+初期設定では10分間隔とする。5分間隔へ変更できるが、プロダクト上必要な鮮度とCloudflare APIの呼び出し回数を考慮し、まず10分で運用する。
 
-## 6. ブラウザ側の匿名ID
+## 3. 指標の定義
 
-### 6.1 保存
+Cloudflare GraphQL Analytics APIの `httpRequestsAdaptiveGroups.sum.visits` を使用する。
 
-既存の実装計画でPresenceにも使用する予定のキーを使う。
+CloudflareはVisitを、外部サイトからの遷移または直接アクセスによって始まったページ閲覧として定義している。1回のVisitには複数のページビューを含められるため、静的ファイルやAPIを含むHTTPリクエスト数とは異なり、通常の再読み込みや同一訪問中のページ遷移をそのまま加算する指標ではない。
 
-```text
-localStorage key: sleepless-anonymous-id
-value: crypto.randomUUID()で生成したUUID
-```
+取得条件:
 
-匿名IDはこのサービス内だけで使用し、外部の識別子や分析データと結合しない。将来「私も眠れない」機能を追加するときも同じIDを再利用し、ブラウザへ複数の識別子を作らない。
+* 対象ゾーン: `sleepless-bot.com` を含むCloudflare Zone
+* 対象ホスト: `sleepless-bot.com`
+* 対象期間: Analytics API呼び出し時刻から遡った24時間
+* リクエスト種別: `requestSource = "eyeball"`
+* 指標: `sum.visits`
 
-### 6.2 訪問通知の抑制
+### 3.1 「人」表示について
 
-再読み込みのたびにPOSTしないよう、最後に訪問通知が成功した時刻も `localStorage` に保存する。
+画面上はUXを優先して「人」と表示するが、`visits` は厳密な実人数やユニークユーザー数ではない。同じ人が時間を空けて再訪すると複数Visitになることがあり、Cloudflareの判定や分析データの反映遅延にも影響される。
 
-```text
-localStorage key: sleepless-visit-reported-at
-value: ISO 8601形式の日時
-```
+したがって、内部仕様・運用資料では「訪問数」と呼ぶ。「正確な利用者数」「ユニークユーザー数」などとは表現しない。
 
-最後の成功から10分未満なら `POST /api/visits` を送信しない。10分以上経過した場合だけ通知する。これにより、短時間の再読み込みによるWorker呼び出しとD1クエリを減らす。
+## 4. 要件
 
-ローカルの時刻は送信抑制にだけ使用する。D1へ保存する訪問時刻はWorker側で生成し、クライアントから受け取らない。端末時刻が不正確な場合でも、24時間集計そのものを改変できないようにする。
+### 4.1 機能要件
 
-`localStorage` が利用できない場合は訪問登録を行わない。リロードごとに一時IDを生成すると人数を水増しするため、メモリ上だけのIDへフォールバックしない。
+* 直近24時間のCloudflare Visitsを10分ごとに取得する。
+* 取得成功時だけD1の最新値を更新する。
+* Web版では既存のX投稿件数と訪問数を1回のAPIリクエストで取得する。
+* 訪問数の取得失敗をX投稿件数の取得失敗へ波及させない。
+* 古い訪問数を現在値として表示しない。
+* CronやWorkerの再実行でD1に重複行を作らない。
 
-## 7. データモデル
+### 4.2 非機能要件
 
-既存の本番D1 `sleepless-bot` に次のテーブルを追加する。現在のmigration管理場所に合わせ、`apps/bot/migrations/0005_create_anonymous_visitors.sql` として管理する。
+* Cloudflare API TokenをWorker Secretとして管理する。
+* API Tokenをブラウザ、ログ、D1、HTTPレスポンスへ出さない。
+* Cloudflare Analytics APIを利用者のアクセスごとに呼ばない。
+* 新しい公開APIエンドポイントを追加しない。
+* 本番とステージングでD1、Zone ID、API Tokenを分離する。
+* Cloudflare Analytics APIとD1の障害時も、Webページ本体を表示できるようにする。
 
-```sql
-CREATE TABLE anonymous_visitors (
-  visitor_key TEXT PRIMARY KEY,
-  first_seen_at TEXT NOT NULL,
-  last_seen_at TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
+## 5. 対象外
 
-CREATE INDEX idx_anonymous_visitors_last_seen_at
-ON anonymous_visitors(last_seen_at);
-```
+初期実装では次を行わない。
 
-### 7.1 各列
+* ブラウザへ匿名ID、Cookie、`localStorage` の識別子を保存すること
+* D1へ訪問者単位のレコードを保存すること
+* IPアドレスやUser-Agentによる独自の重複排除
+* 端末をまたいだ実人数の特定
+* 国、参照元、端末などの属性別表示
+* 過去推移のグラフ表示
+* 秒単位のリアルタイム更新
+* Cloudflare Analyticsの値を課金・請求の正本として使用すること
 
-| 列 | 用途 |
-| --- | --- |
-| `visitor_key` | UUID文字列をSHA-256でハッシュ化した16進文字列 |
-| `first_seen_at` | 最初に登録した時刻 |
-| `last_seen_at` | 最後に登録した時刻。直近24時間の判定に使用 |
-| `created_at` | 行の作成時刻 |
-| `updated_at` | 行の最終更新時刻 |
+## 6. 実装先
 
-生のUUIDは保存しない。UUIDは十分なランダム性を持つため、サーバー側でSHA-256へ変換した値を主キーにする。暗号学的ハッシュであっても継続的に同じ利用者を区別する仮名識別子であるため、公開情報として扱わず、ログやAPIレスポンスへ出さない。
+### 6.1 API Worker
 
-## 8. API設計
+`apps/api` に次の責務を追加する。
 
-### 8.1 訪問登録
+* Scheduled handlerからCloudflare Analytics APIを呼ぶ。
+* 成功結果をD1へ保存する。
+* `GET /api/counts/latest` で最新の訪問数を読み取る。
+* 鮮度を検証し、古い場合は表示対象外にする。
 
-```http
-POST /api/visits
-Content-Type: application/json
-Origin: https://sleepless-bot.com
+Bot WorkerはX API連携と投稿の責務を維持する。訪問数はWeb表示用なので、Analytics APIのCronをBot Workerへ追加しない。
 
+### 6.2 フロントエンド
+
+既存の `fetchLatestCount()` が受け取るレスポンスへ訪問数を追加する。ブラウザから新しいAPIリクエストは送らない。
+
+## 7. Cloudflare設定
+
+### 7.1 Cron Trigger
+
+`apps/api/wrangler.jsonc` に10分間隔のCronを追加する。
+
+```jsonc
 {
-  "anonymousId": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-成功:
-
-```http
-HTTP/1.1 204 No Content
-Cache-Control: no-store
-```
-
-エラー:
-
-| 状態 | コード | 条件 |
-| --- | --- | --- |
-| 400 | `INVALID_REQUEST` | JSON不正、UUID不正、余分なフィールド |
-| 403 | `ORIGIN_NOT_ALLOWED` | 許可していないOrigin |
-| 405 | `METHOD_NOT_ALLOWED` | POST以外 |
-| 413 | `PAYLOAD_TOO_LARGE` | 本文が上限を超える |
-| 415 | `UNSUPPORTED_MEDIA_TYPE` | JSON以外 |
-| 429 | `RATE_LIMITED` | WAF等の制限超過 |
-| 500 | `UNEXPECTED_ERROR` | 予期しない失敗 |
-| 503 | `VISIT_STORAGE_UNAVAILABLE` | D1へ保存できない |
-
-レスポンスには匿名ID、ハッシュ、D1の内部情報を含めない。失敗レスポンスはキャッシュしない。
-
-### 8.2 UUID検証
-
-* JSON本文の上限を1 KiBとする。
-* オブジェクト直下に `anonymousId` だけを許可する。
-* UUIDの標準的な文字列表現だけを受け付ける。
-* 大文字・小文字を正規化してからハッシュ化する。
-* クエリ文字列は受け付けない。
-
-### 8.3 upsert
-
-Workerが現在時刻をUTCのISO 8601形式で生成し、次の意味になるupsertを実行する。
-
-```sql
-INSERT INTO anonymous_visitors (
-  visitor_key,
-  first_seen_at,
-  last_seen_at,
-  created_at,
-  updated_at
-) VALUES (?1, ?2, ?2, ?2, ?2)
-ON CONFLICT(visitor_key) DO UPDATE SET
-  last_seen_at = excluded.last_seen_at,
-  updated_at = excluded.updated_at
-WHERE anonymous_visitors.last_seen_at <= ?3;
-```
-
-`?3` には現在時刻の10分前を渡す。クライアント側の抑制が回避されても、同じIDについて10分以内の更新をD1へ書き込まない。競合時も主キー制約によって行は増えない。
-
-条件不成立で更新されなかった場合も、すでに訪問済みなのでHTTP 204を返す。
-
-### 8.4 最新件数APIの拡張
-
-既存の `GET /api/counts/latest` に次を追加する。
-
-```json
-{
-  "windowStartAt": "2026-10-24T01:00:00Z",
-  "windowEndAt": "2026-10-24T02:00:00Z",
-  "fetchedAt": "2026-10-24T02:00:08Z",
-  "postCount": 1284,
-  "queryVersion": "v3",
-  "visitors": {
-    "count": 42,
-    "windowHours": 24,
-    "asOf": "2026-10-24T02:14:00Z"
+  "triggers": {
+    "crons": ["*/10 * * * *"]
   }
 }
 ```
 
-集計SQL:
+CronはUTCで評価されるが、10分間隔のローリング集計なのでタイムゾーン変換は不要である。
 
-```sql
-SELECT COUNT(*) AS visitor_count
-FROM anonymous_visitors
-WHERE last_seen_at >= ?1;
+### 7.2 環境変数とSecret
+
+```text
+CLOUDFLARE_ZONE_ID                  通常の環境変数
+CLOUDFLARE_ANALYTICS_API_TOKEN      Worker Secret
+ANALYTICS_HOSTNAME                  通常の環境変数
 ```
 
-`?1` はAPI Workerが生成した現在時刻の24時間前とする。`last_seen_at` のインデックスを使い、対象期間外の行を走査しない。
+本番の `ANALYTICS_HOSTNAME` は `sleepless-bot.com` とする。Previewやステージングでは本番トラフィックを表示しないよう、対象ZoneとHostnameを明示的に分ける。適切なステージング用分析対象がない場合は、固定fixtureを返す開発モードではなく、Cronを無効化してD1へテストデータを投入する。
 
-訪問人数だけの取得に失敗した場合、X投稿件数まで503にしない。次のように `visitors` を `null` にしてHTTP 200を返し、フロントエンドは人数領域だけをエラー状態にする。
+API Tokenには対象Zoneの分析読み取りに必要な最小権限だけを付与する。アカウント全体の編集権限やWorkersの編集権限は付与しない。
+
+## 8. Analytics API
+
+### 8.1 エンドポイント
+
+```text
+POST https://api.cloudflare.com/client/v4/graphql
+```
+
+ヘッダー:
+
+```http
+Authorization: Bearer <CLOUDFLARE_ANALYTICS_API_TOKEN>
+Content-Type: application/json
+X-Rate-Limit-Type: account-based
+```
+
+API TokenはAuthorizationヘッダーにだけ設定し、URLやログへ含めない。
+
+### 8.2 GraphQLクエリ
+
+実装時はCloudflare GraphQL Schemaで、対象Zoneにおけるフィールド名と利用可能範囲を確認する。論理的には次のクエリを使用する。
+
+```graphql
+query VisitsByHostname(
+  $zoneTag: string
+  $start: Time
+  $end: Time
+  $hostname: string
+) {
+  viewer {
+    zones(filter: { zoneTag: $zoneTag }) {
+      httpRequestsAdaptiveGroups(
+        limit: 1
+        filter: {
+          datetime_geq: $start
+          datetime_lt: $end
+          clientRequestHTTPHost: $hostname
+          requestSource: "eyeball"
+        }
+      ) {
+        sum {
+          visits
+        }
+      }
+    }
+  }
+}
+```
+
+変数例:
+
+```json
+{
+  "zoneTag": "<CLOUDFLARE_ZONE_ID>",
+  "start": "2026-10-23T12:00:00Z",
+  "end": "2026-10-24T12:00:00Z",
+  "hostname": "sleepless-bot.com"
+}
+```
+
+開始・終了時刻はWorkerが同じ `now` から計算する。`end = now`、`start = now - 24時間` とし、ISO 8601のUTCで送る。
+
+### 8.3 レスポンス検証
+
+HTTP 200だけで成功と判定しない。次をすべて検証する。
+
+* HTTPステータスが200である。
+* JSONとして解析できる。
+* トップレベルの `errors` が存在しない。
+* `viewer.zones` が1件である。
+* `httpRequestsAdaptiveGroups` が期待した1グループを返す。
+* `sum.visits` が0以上の安全な整数である。
+* 値がJavaScriptの `Number.MAX_SAFE_INTEGER` を超えない。
+
+検証に失敗した場合はD1を更新しない。レスポンス本文全体はログへ出さず、安全なエラーコードだけを記録する。
+
+### 8.4 レート制限
+
+Cloudflare GraphQL Analytics APIの既定値は、1ユーザーまたはAPI Tokenにつき5分間に300クエリである。10分ごとに1回の設計では月約4,320回であり、通常運用で上限に近づかない。
+
+閲覧リクエストからAnalytics APIを呼び出さないため、Webアクセスの増加はGraphQL APIの呼び出し回数へ影響しない。
+
+## 9. D1データモデル
+
+既存の本番D1 `sleepless-bot` に最新の成功値を1行だけ保存する。
+
+現在のmigration管理場所に合わせ、`apps/bot/migrations/0005_create_web_visit_count.sql` として管理する。
+
+```sql
+CREATE TABLE web_visit_count (
+  singleton_key INTEGER PRIMARY KEY CHECK (singleton_key = 1),
+  window_start_at TEXT NOT NULL,
+  window_end_at TEXT NOT NULL,
+  visit_count INTEGER NOT NULL CHECK (visit_count >= 0),
+  fetched_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+```
+
+訪問者単位の情報やAnalytics APIの生レスポンスは保存しない。
+
+### 9.1 UPSERT
+
+```sql
+INSERT INTO web_visit_count (
+  singleton_key,
+  window_start_at,
+  window_end_at,
+  visit_count,
+  fetched_at,
+  created_at,
+  updated_at
+) VALUES (1, ?1, ?2, ?3, ?4, ?4, ?4)
+ON CONFLICT(singleton_key) DO UPDATE SET
+  window_start_at = excluded.window_start_at,
+  window_end_at = excluded.window_end_at,
+  visit_count = excluded.visit_count,
+  fetched_at = excluded.fetched_at,
+  updated_at = excluded.updated_at
+WHERE excluded.fetched_at > web_visit_count.fetched_at;
+```
+
+常に主キー `1` を使うため、Cronの再実行で行数は増えない。古い実行が遅れて完了しても、より新しいスナップショットを上書きしない。
+
+### 9.2 保存失敗
+
+Analytics API取得後にD1保存が失敗した場合は、その実行を失敗として記録する。D1保存だけを短いバックオフで再試行してよいが、Analytics APIを再度呼ばない。
+
+次回Cronが新しい24時間枠を取得するため、無制限の再試行やQueueは導入しない。
+
+## 10. Cron処理
+
+```text
+Scheduled event
+  ↓
+環境変数・Secretの存在確認
+  ↓
+windowEnd = 現在時刻
+windowStart = windowEnd - 24時間
+  ↓
+Analytics APIを1回呼ぶ
+  ↓
+HTTP・GraphQL・値を検証
+  ├─ 失敗 → 安全なログを記録し、D1は更新しない
+  └─ 成功
+       ↓
+     D1へUPSERT
+       ├─ 失敗 → 安全なログを記録
+       └─ 成功 → 完了ログ
+```
+
+Analytics APIのタイムアウトは10秒を初期値とする。429、5xx、タイムアウト時に同じCron内でAnalytics APIを自動再試行しない。10分後の次回Cronで新しい集計枠を取得する。これによりAPI障害時の呼び出し増幅を避ける。
+
+Workerの重複実行が発生してもD1は1行に収束する。10分間隔かつAnalytics APIの上限に十分余裕があるため、初期実装ではD1 leaseを追加しない。実測で重複呼び出しが問題になった場合にだけleaseを検討する。
+
+## 11. APIレスポンス
+
+既存の `GET /api/counts/latest` に `visits` を追加する。
 
 ```json
 {
@@ -250,210 +302,244 @@ WHERE last_seen_at >= ?1;
   "fetchedAt": "2026-10-24T02:00:08Z",
   "postCount": 1284,
   "queryVersion": "v3",
-  "visitors": null
+  "visits": {
+    "count": 42,
+    "windowStartAt": "2026-10-23T02:10:00Z",
+    "windowEndAt": "2026-10-24T02:10:00Z",
+    "fetchedAt": "2026-10-24T02:10:02Z"
+  }
 }
 ```
 
-既存クライアントは追加フィールドを無視できるため、後方互換性を維持できる。
+X投稿件数の時間枠と訪問数の時間枠は異なるため、それぞれの時刻を返す。
 
-## 9. キャッシュ
+### 11.1 鮮度判定
 
-`GET /api/counts/latest` のHTTP 200を60秒キャッシュする。[Counts API キャッシュ・レート制限ガイド](API_CACHE_RATE_LIMITING_GUIDE.md)の設計を適用し、X投稿件数と訪問人数を同じレスポンスとしてキャッシュする。
+Cronは10分間隔なので、現在時刻と `visits.fetchedAt` の差が30分を超えた場合は古いデータと判定する。古い値を現在の24時間値として返さず、`visits` を `null` にする。
 
-これにより、アクセスが集中してもD1の人数集計はキャッシュミス時だけ実行される。最大60秒の表示遅延を許容する。
+```json
+{
+  "windowStartAt": "2026-10-24T01:00:00Z",
+  "windowEndAt": "2026-10-24T02:00:00Z",
+  "fetchedAt": "2026-10-24T02:00:08Z",
+  "postCount": 1284,
+  "queryVersion": "v3",
+  "visits": null
+}
+```
 
-`POST /api/visits` はキャッシュしない。登録直後のGETがキャッシュ済みの場合、本人を含む人数が最大60秒遅れて表示されることがある。訪問人数はリアルタイム性を保証しないため、この遅延を許容する。
+D1に行がない場合も `visits: null` とする。
 
-## 10. 画面設計
+### 11.2 障害分離
 
-X投稿件数のメッセージより下に、補助情報として表示する。
+X投稿件数と訪問数は独立してD1から読み取る。訪問数の読み取りまたは検証だけが失敗した場合、X投稿件数を含むHTTP 200を返し、`visits` は `null` にする。
+
+X投稿件数自体が利用不可の場合は、既存仕様どおり503を返す。訪問数だけを返す代替レスポンスは初期実装では追加しない。
+
+既存クライアントは未知の `visits` フィールドを無視できるため、レスポンス拡張は後方互換になる。
+
+## 12. キャッシュ
+
+`GET /api/counts/latest` の成功レスポンスを60秒キャッシュする。[Counts API キャッシュ・レート制限ガイド](API_CACHE_RATE_LIMITING_GUIDE.md)の設計を適用する。
+
+訪問数は10分ごとに更新されるため、60秒キャッシュによる追加遅延を許容する。エラー応答はキャッシュしない。
+
+キャッシュはD1読み取りとWorker CPUを減らすが、Workerの料金上の受信リクエスト数を必ずしも減らすものではない。不要なクエリ文字列の拒否とWAF Rate Limitingを併用する。
+
+## 13. フロントエンド
+
+### 13.1 データ取得
+
+既存の `fetchLatestCount()` を1回だけ呼ぶ。訪問数用の追加fetchは実装しない。
+
+### 13.2 表示
+
+X投稿件数のメッセージより下に補助情報として表示する。
 
 ```text
 この24時間に
 42人が訪れました
 ```
 
-表示上のルール:
+表示ルール:
 
-* 0件の場合は「この24時間の訪問は、まだありません」と表示する。
-* 1件でも単位は「人」とする。
-* 3桁区切りを使用する。
-* `visitors: null` の場合は「訪問人数を取得できませんでした」と表示するか、領域を非表示にする。
-* 数字を競争や焦りにつなげる演出、通知バッジ、ランキング、急増表示は行わない。
-* 人数取得中もX投稿件数の表示を妨げない。
-* スクリーンリーダーには文章として読み上げられる構造にする。
+* `count > 0`: 「この24時間に N人が訪れました」
+* `count = 0`: 「この24時間の訪問は、まだありません」
+* `visits = null`: 訪問数領域を非表示にする
+* 数字は3桁区切りにする
+* 集計時刻を詳細表示する場合は、`visits.windowStartAt` と `visits.windowEndAt` を使用する
+* ランキング、急増通知、煽る表現、強いアニメーションを追加しない
+* 訪問数の取得状態がX投稿件数の描画を妨げないようにする
 
-## 11. 濫用対策
+## 14. プライバシー
 
-匿名IDはクライアントで生成できるため、攻撃者が異なるUUIDを大量送信すると人数を水増しできる。D1の主キーだけではこの攻撃を防げない。
+この方式では、訪問数表示のために新しいCookie、匿名ID、`localStorage`を導入しない。D1には集計済みの件数と時間だけを保存し、訪問者単位のデータを保存しない。
 
-初期実装では次を必須とする。
+既存のプライバシーポリシーにはCloudflare Web Analyticsによるアクセス状況の計測を記載済みである。実装前に、実際にGraphQLで利用するデータセットと現在の説明が一致することを確認する。必要な場合は次を追記する。
 
-* `/api/visits` に送信元IP単位のWAF Rate Limitingを設定する。
-* 通常利用は10分に1回であることを前提に、共有回線を誤遮断しない余裕を持たせた閾値から開始する。
-* Web WorkerとAPI Workerの両方で、メソッド、クエリ文字列、Content-Type、本文サイズ、Originを検証する。
-* D1や構造化ログにIPアドレスと匿名IDを保存しない。
-* 1時間当たりの新規ID数と、WAFのBlock数を監視する。
-* 異常増加時は訪問登録を一時停止できるよう、Worker環境変数によるkill switchを用意する。
+* Cloudflareが集計した訪問数を本サイト上で表示すること
+* D1には集計済み件数と対象時刻・取得時刻だけを保存すること
+* 厳密な実人数を示すものではないこと
 
-初期閾値の候補は、1 IP当たり `20 requests / 10 minutes` とする。携帯回線や組織ネットワークのNATでは複数人が同じIPを共有するため、本番導入前に利用可能なCloudflareプランのカウント期間と通常トラフィックを確認して確定する。
+## 15. セキュリティ
 
-分散した送信元からの意図的な水増しを完全には防げない。異常が継続する場合に限り、Turnstileの導入、異常値の表示停止、集計方式の見直しを行う。ブラウザフィンガープリントは採用しない。
+* Analytics API Tokenは `wrangler secret put` で登録する。
+* `.dev.vars`、`.env`、ログ、テストfixtureへ実Tokenを入れない。
+* Tokenには対象Zoneの分析読み取りだけを許可する。
+* GraphQLレスポンス全体をログへ出さない。
+* ログには安全なイベント名、時間枠、HTTPステータス、エラーコードだけを残す。
+* ブラウザからAnalytics APIへ到達できる経路を作らない。
+* Cronを手動実行する公開HTTPエンドポイントを作らない。
+* `GET /api/counts/latest` の既存WAF Rate Limiting方針を維持する。
 
-## 12. データ保持と削除
+## 16. 負荷と利用量
 
-表示対象は24時間だが、不具合調査と再訪時の重複抑制のため、匿名訪問レコードを30日間保持する。保持期間はプライバシーポリシーと一致させる。
+10分間隔では次の利用量になる。
 
-API Workerに1日1回のCron Triggerを追加し、次を実行する。
+| 項目 | 概算 |
+| --- | ---: |
+| Cron実行 | 144回/日 |
+| Analytics API | 144回/日 |
+| D1書き込み | 最大144行更新/日 |
+| 月間Cron・API呼び出し | 約4,320回 |
 
-```sql
-DELETE FROM anonymous_visitors
-WHERE last_seen_at < ?1;
-```
+D1には1行だけ保存する。Webアクセスが増えてもAnalytics APIとD1書き込みの回数は増えない。
 
-`?1` は実行時刻の30日前とする。`last_seen_at` のインデックスを利用する。削除件数だけを構造化ログへ記録し、visitor keyは記録しない。
+WebアクセスごとのD1読み取りは、既存の `GET /api/counts/latest` 内で1行増える。60秒キャッシュが有効な場合、実際のD1読み取りはキャッシュミス時だけ発生する。
 
-削除失敗はWeb表示を停止させないが、次回Cronで再試行する。連続失敗は通知対象とする。
+Workers PaidおよびD1 Paidの月間枠に対して小さい。実測値はCloudflare DashboardでWorkerリクエスト数、CPU時間、D1読み取り・書き込み行数を確認する。
 
-利用者がブラウザ側の識別子を削除する方法として、サイトデータまたは `localStorage` の削除手順をプライバシーポリシーに記載する。サーバー側の個別削除要求へ対応する機能は初期実装に含めない。生の匿名IDを保存しないため、問い合わせから対象行を特定できないことも明記する。
-
-## 13. プライバシーポリシーの変更
-
-現在の「Cookieも使用していません」という説明だけでは不十分になる。リリース前に少なくとも次を追記する。
-
-* Cookieは使わないが、匿名IDと最終通知時刻を `localStorage` に保存すること
-* 利用目的は直近24時間の訪問人数集計と、将来のPresence重複防止に限定すること
-* D1には匿名IDのハッシュ、初回・最終訪問時刻を保存すること
-* IPアドレスや氏名等と結合しないこと
-* サーバー側の保持期間は30日であること
-* ブラウザのサイトデータを削除する方法
-* 端末やブラウザをまたぐため、表示値は厳密な実人数ではないこと
-
-プライバシーポリシーの改定日も更新する。
-
-## 14. D1・Worker利用量
-
-通常の1訪問通知は、主キー検索を伴うupsertを1回実行する。新しい匿名IDでは1行を追加し、同じIDの10分以内の再通知では書き込みを行わない。
-
-人数取得は60秒キャッシュのミス時だけ行う。`last_seen_at` のインデックスにより、主に直近24時間の対象行を読み取る。
-
-想定例:
-
-* 1日1,000人
-* 1人当たり平均2回の有効な訪問通知
-* 訪問登録: 約2,000クエリ/日
-* 新規行: 最大約1,000行/日
-* 人数集計: 最大1,440回/日。ただしキャッシュ拠点数等により変動
-
-Workers Paidの月間枠に対して十分小さい。実際の課金はD1の返却メタデータとCloudflare Dashboardで、読み取り行数・書き込み行数・Workerリクエスト数を確認する。
-
-## 15. エラー処理
+## 17. エラー処理
 
 | 障害 | 動作 |
 | --- | --- |
-| `localStorage` 利用不可 | 訪問登録を行わず、人数表示だけ試みる |
-| 訪問POST失敗 | ページとX投稿件数を表示し、次回訪問時に再試行 |
-| 人数集計失敗 | `visitors: null` とし、X投稿件数は表示 |
-| D1全体の障害 | 既存仕様どおりX投稿件数をエラー表示。古い人数を最新として表示しない |
-| WAFによる429 | 訪問登録を諦め、画面全体は表示 |
-| cleanup失敗 | 既存データを残し、翌日に再試行・連続失敗を通知 |
-| 異常な人数増加 | kill switchでPOSTを停止し、人数表示を一時非表示にする |
+| Analytics API 400・認証失敗 | D1を更新せず、設定エラーとして通知 |
+| Analytics API 429 | D1を更新せず、次回Cronまで待つ |
+| Analytics API 5xx・タイムアウト | D1を更新せず、次回Cronまで待つ |
+| GraphQL `errors` または形式不正 | D1を更新せず、安全なエラーコードを記録 |
+| D1保存失敗 | Analytics APIを再取得せず、保存だけ上限付きで再試行 |
+| D1にデータなし | `visits: null` |
+| 最終成功から30分超過 | `visits: null` |
+| 訪問数のD1読み取り失敗 | X投稿件数はHTTP 200で返し、`visits: null` |
 
-## 16. テスト
+失敗時に0件を保存・表示しない。0件はAnalytics APIが正常に返した場合だけ有効な値として扱う。
 
-### 16.1 API単体・結合テスト
+## 18. 監視
 
-* 新しいUUIDをPOSTすると1行作成される。
-* 同じUUIDを連続POSTしても行数が増えない。
-* 同じUUIDの10分以内のPOSTで `last_seen_at` が更新されない。
-* 10分経過後のPOSTで `last_seen_at` が更新される。
-* UUIDの生値がD1に保存されない。
-* 24時間以内の行だけが集計される。
-* 境界時刻の包含・除外が仕様どおりになる。
-* 不正なUUID、JSON、Content-Type、Origin、本文サイズ、クエリ文字列を拒否する。
-* 訪問人数の取得失敗時もX投稿件数をHTTP 200で返す。
-* cleanupが30日より古い行だけを削除する。
-* ログに匿名ID、ハッシュ、IPアドレスを出さない。
+最低限、次を確認する。
 
-### 16.2 フロントエンドテスト
-
-* 初回表示で匿名IDを作成し、訪問POSTを送る。
-* 再読み込みしても10分以内はPOSTを送らない。
-* 同じ匿名IDで人数が増えない。
-* `localStorage` が使えなくてもページが表示される。
-* 正常値、0件、`visitors: null` を正しく描画する。
-* 数字を3桁区切りで表示する。
-* X投稿件数と訪問人数の片方が失敗しても、もう片方を表示する。
-
-### 16.3 ステージング確認
-
-* PreviewがステージングD1だけへ書き込む。
-* 複数ブラウザで人数が増える。
-* 同一ブラウザの再読み込みでは増えない。
-* 24時間経過相当のテストデータが対象外になる。
-* WAF閾値をわずかに超え、429またはBlockとSecurity Eventsを確認する。
-* キャッシュのMISS/HITと最大60秒の反映遅延を確認する。
-
-## 17. 監視
-
-導入後は次を確認する。
-
-* `/api/visits` の成功、400、403、429、500、503件数
-* 1時間ごとの新規匿名ID数
-* 直近24時間の人数と前時間比
-* D1の読み取り行数、書き込み行数、レイテンシ、overloadedエラー
+* Cronの実行回数、成功率、最終成功時刻
+* Analytics APIのHTTPステータスと安全なエラーコード
+* GraphQL APIの429件数
+* D1の最新 `fetched_at`
+* D1保存失敗と読み取り失敗
+* `visits: null` のレスポンス比率
 * Workerリクエスト数とCPU時間
+* D1の読み取り・書き込み行数
 * Counts APIキャッシュのHIT率
-* cleanupの削除件数と連続失敗
-* WAFのBlock件数
 
-通常値は公開後に実測し、急増率だけで自動的に利用者を遮断しない。異常判定はWAFイベント、参照元、Workerエラー等と合わせて行う。
+最終成功から30分を超えた場合は通知対象とする。
 
-## 18. 導入手順
+## 19. テスト
 
-1. ステージングD1へmigrationを適用する。
-2. API Workerへ訪問登録、人数集計、cleanupを実装する。
-3. Web Workerへ新しいAPIパスの転送と事前検証を追加する。
-4. フロントエンドへ匿名ID、通知抑制、人数表示を実装する。
-5. プライバシーポリシーを改定する。
-6. 自動テストを追加する。
-7. PreviewとステージングD1で動作確認する。
-8. WAF Rate Limitingを設定して動作確認する。
-9. 本番D1へmigrationを適用する。
-10. API Worker、Web Workerの順に本番へ反映する。
-11. D1・Worker・WAFの利用量とエラーを監視する。
+### 19.1 Analytics APIクライアント
 
-WAFとプライバシーポリシーの準備が完了するまで、本番の訪問POSTを有効にしない。
+* 正常レスポンスから0以上のVisit数を取得する。
+* HTTP 200でもGraphQL `errors` があれば失敗にする。
+* Zoneなし、複数Zone、グループなし、複数グループを拒否する。
+* 負数、小数、文字列、null、安全整数超過を拒否する。
+* 400、401、403、429、5xx、タイムアウトを安全なエラーへ変換する。
+* Tokenやレスポンス本文をログへ出さない。
+* 開始・終了時刻が正確に24時間差になる。
+* Hostnameと `requestSource: eyeball` を必ず設定する。
 
-## 19. ロールバック
+### 19.2 D1
 
-問題が発生した場合は、次の順で影響を止める。
+* 初回成功でsingleton行を作成する。
+* 次回成功で同じ行を更新する。
+* 古い実行が新しい `fetched_at` を上書きしない。
+* API失敗時に既存行を変更しない。
+* 0件を正常値として保存できる。
+* 負数を保存できない。
 
-1. kill switchで `POST /api/visits` を503または204に固定し、D1書き込みを止める。
-2. Web画面の訪問人数領域を非表示にする。
-3. `GET /api/counts/latest` から `visitors` を外し、従来レスポンスへ戻す。
-4. 必要に応じてAPI WorkerのCron Triggerを無効化する。
+### 19.3 Counts API
 
-既存のX投稿件数機能とBot Workerは継続する。migrationで作成したテーブルは直ちに削除せず、原因調査と再リリース判断が完了するまで保持する。
+* 鮮度内の値を `visits` として返す。
+* 行なしと30分超過で `visits: null` を返す。
+* 訪問数取得失敗時もX投稿件数を返す。
+* 既存レスポンス項目を変更しない。
+* 不要なクエリ文字列を拒否する。
+* HTTP 200だけを60秒キャッシュする。
 
-## 20. 完了条件
+### 19.4 フロントエンド
 
-* [ ] 初回訪問で人数へ反映される。
-* [ ] 同一ブラウザの再読み込みで人数が増えない。
-* [ ] 直近24時間を過ぎた訪問が人数から外れる。
-* [ ] UUIDの生値、IPアドレス、User-AgentをD1とログへ保存しない。
-* [ ] 訪問機能の障害がX投稿件数表示へ波及しない。
-* [ ] GET成功レスポンスが60秒キャッシュされる。
-* [ ] `/api/visits` のWAF Rate Limitingが有効である。
-* [ ] cleanupが30日より古い行を削除する。
-* [ ] プライバシーポリシーが実装内容と一致する。
-* [ ] 本番とPreviewが別のD1を使用する。
+* 既存のfetch 1回だけで両方を描画する。
+* 正常値、0件、`visits: null` を正しく扱う。
+* 数字を3桁区切りで表示する。
+* 訪問数の描画失敗がX投稿件数へ波及しない。
+* アクセシビリティツリーで自然な文章として読み上げられる。
 
-## 21. 公式資料
+### 19.5 ステージング
 
+* fixtureを使った自動テストの後、権限を限定したステージングTokenで実API疎通を確認する。
+* GraphQL Schemaのフィールドと対象Zoneの利用可能範囲を確認する。
+* Cron 1回につきAnalytics APIが1回だけ呼ばれる。
+* D1のsingleton行だけが更新される。
+* 30分超過データを画面へ表示しない。
+* Webページ表示時のAPIリクエスト数が導入前と同じである。
+* Cloudflare DashboardのVisitsと同じ時間範囲で概ね一致する。
+* 再読み込みだけで不自然にVisit数が増えないことを、他トラフィックのない検証用ホストで確認する。
+
+## 20. 導入手順
+
+1. Cloudflare DashboardのVisitsとGraphQLクエリ結果を手動で比較する。
+2. 最小権限の本番・ステージングAPI Tokenを作成する。
+3. ステージングD1へmigrationを適用する。
+4. API WorkerへAnalyticsクライアント、Scheduled handler、D1保存を実装する。
+5. Counts APIへ訪問数と鮮度判定を追加する。
+6. フロントエンドへ表示を追加する。
+7. 必要に応じてプライバシーポリシーを更新する。
+8. 自動テストを実行する。
+9. ステージングでCron、D1、API、画面を確認する。
+10. 本番D1へmigrationを適用する。
+11. 本番API WorkerへSecretと環境変数を登録する。
+12. API Worker、Web Workerの順にデプロイする。
+13. 最終成功時刻、画面、利用量を監視する。
+
+API Token、Cron、D1 migrationのすべてが揃うまで、画面の訪問数領域を有効にしない。
+
+## 21. ロールバック
+
+問題が発生した場合は次の順で戻す。
+
+1. Web画面の訪問数領域を非表示にする。
+2. `GET /api/counts/latest` から `visits` を外し、従来レスポンスへ戻す。
+3. API WorkerのAnalytics Cronを無効化する。
+4. 不要になったAPI Tokenを失効させる。
+
+既存のX投稿件数、Bot Worker、D1の既存テーブルは継続する。`web_visit_count` は原因調査が完了するまで削除しない。
+
+## 22. 完了条件
+
+* [ ] Cronが10分ごとにAnalytics APIを1回だけ呼ぶ。
+* [ ] 直近24時間のVisitsがD1の1行へ保存される。
+* [ ] API失敗時に既存の成功値を上書きしない。
+* [ ] 古い実行が新しいスナップショットを上書きしない。
+* [ ] `GET /api/counts/latest` の1回でX投稿件数と訪問数を取得できる。
+* [ ] Webページ表示時のAPIリクエスト数が増えていない。
+* [ ] 30分を超えた古い訪問数を表示しない。
+* [ ] 訪問数機能の障害がX投稿件数表示へ波及しない。
+* [ ] API Tokenがブラウザ、ログ、D1、Gitに存在しない。
+* [ ] 画面上の数値がCloudflare Dashboardと同じ時間範囲で概ね一致する。
+* [ ] 表示とプライバシーポリシーが実際の集計方式と一致する。
+
+## 23. 公式資料
+
+* [Cloudflare GraphQL Analytics API](https://developers.cloudflare.com/analytics/graphql-api/)
+* [Querying HTTP events by hostname](https://developers.cloudflare.com/analytics/graphql-api/tutorials/end-customer-analytics/)
+* [GraphQL Analytics API limits](https://developers.cloudflare.com/analytics/graphql-api/limits/)
+* [Account-based rate limiting](https://developers.cloudflare.com/analytics/graphql-api/account-based-rate-limiting/)
+* [Cloudflare Zone Analytics](https://developers.cloudflare.com/analytics/account-and-zone-analytics/zone-analytics/)
 * [Cloudflare D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/)
 * [Cloudflare D1 limits](https://developers.cloudflare.com/d1/platform/limits/)
-* [Cloudflare Workers Cache](https://developers.cloudflare.com/workers/cache/)
-* [Cloudflare WAF Rate Limiting](https://developers.cloudflare.com/waf/rate-limiting-rules/)
-* [Web Crypto API: digest](https://developer.mozilla.org/docs/Web/API/SubtleCrypto/digest)
-* [Web Storage API](https://developer.mozilla.org/docs/Web/API/Web_Storage_API)
+* [Cloudflare Workers Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/)

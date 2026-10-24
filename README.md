@@ -18,7 +18,7 @@ Phase 4の動的投稿は本番反映済みです。Phase 5（投稿用OAuthト�
 
 ## 計画
 
-実装方針と各フェーズの完了条件は[実装計画](docs/BOT_IMPLEMENTATION_PLAN.md)を参照してください。試作Webページを独自ドメインでCloudflareから配信する手順は[Cloudflare配信ガイド](docs/WEB_CLOUDFLARE_DEPLOY_GUIDE.md)、Counts APIのキャッシュと濫用対策は[APIキャッシュ・レート制限ガイド](docs/API_CACHE_RATE_LIMITING_GUIDE.md)、D1を使った直近24時間の訪問人数表示は[訪問人数表示設計書](docs/VISITOR_COUNT_DESIGN.md)にまとめています。
+実装方針と各フェーズの完了条件は[実装計画](docs/BOT_IMPLEMENTATION_PLAN.md)を参照してください。試作Webページを独自ドメインでCloudflareから配信する手順は[Cloudflare配信ガイド](docs/WEB_CLOUDFLARE_DEPLOY_GUIDE.md)、Counts APIのキャッシュと濫用対策は[APIキャッシュ・レート制限ガイド](docs/API_CACHE_RATE_LIMITING_GUIDE.md)、Cloudflare Analytics APIとD1を使った直近24時間の訪問数表示は[訪問数表示設計書](docs/VISITOR_COUNT_DESIGN.md)にまとめています。
 
 ## ディレクトリ構成
 
